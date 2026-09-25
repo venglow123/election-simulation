@@ -55,9 +55,10 @@ l'API Flask se font entièrement dans les conteneurs Docker.
 
 | Bibliothèque | Version | Usage |
 | --- | --- | --- |
-| Flask | 3.0.3 | API JSON et serveur de l'application |
+| Flask | 3.1.3 | API JSON et serveur de l'application |
 | Flask-SQLAlchemy | 3.1.1 | Accès à la base SQLite via SQLAlchemy |
 | Gunicorn | 22.0.0 | Serveur WSGI de production localisé dans le conteneur |
+| pytest | 9.0.3 | Tests unitaires |
 
 ### Frontend
 
@@ -65,9 +66,9 @@ l'API Flask se font entièrement dans les conteneurs Docker.
 | --- | --- | --- |
 | React | ^18.3.1 | Construction de l'interface utilisateur |
 | React DOM | ^18.3.1 | Rendu React dans le navigateur |
-| React Router DOM | ^6.26.2 | Navigation entre les vues de l'application |
-| Vite | ^5.4.8 | Serveur de développement et build du frontend |
-| @vitejs/plugin-react | ^4.3.1 | Intégration de React dans Vite |
+| React Router DOM | ^7.18.4 | Navigation entre les vues de l'application |
+| Vite | ^8.3.1 | Serveur de développement et build du frontend |
+| @vitejs/plugin-react | ^5.2.0 | Intégration de React dans Vite |
 | qrcode | ^1.5.4 | Génération du QR code dans l'image de partage |
 | jsqr | ^1.4.0 | Lecture des QR codes depuis les images importées |
 | fflate | ^0.8.2 | Compression du payload avant encodage QR |
