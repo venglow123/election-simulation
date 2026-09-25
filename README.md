@@ -18,7 +18,7 @@ Sankey.
   sauvegarde automatique sans bouton)
 - Définir une matrice de reports de voix (par candidat et par abstentionniste
   du 1er tour : % vers chacun des 2 finalistes). L'abstention au 2e tour se
-  calcule automatiquement (100% − les 2 reports saisis)
+  calcule automatiquement (100% - les 2 reports saisis)
 - Calcul automatique des résultats du 2e tour (voix, %, vainqueur, abstention),
   mis à jour en direct à chaque modification
 - Diagramme de Sankey (SVG, sans dépendance externe) pour visualiser les flux
@@ -28,6 +28,13 @@ Sankey.
   partage
 - Import d'un scénario depuis une image contenant un QR code, par fichier ou
   presse-papiers, avec validation côté navigateur et côté API
+
+## Fonctionnalités à venir
+
+- Gestion des élections
+- Groupement des simulations par élection
+- Gestion des sources : sondages, résultats d'élections précédentes et
+  reports de voix
 
 > Seul le scrutin uninominal majoritaire à 2 tours est géré. Les 2 finalistes
 > du 2e tour sont automatiquement les 2 candidats ayant obtenu le plus de voix
