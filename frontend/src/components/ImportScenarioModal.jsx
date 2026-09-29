@@ -63,7 +63,7 @@ async function decodeImageFile(file) {
   throw new Error("Aucun QR code lisible n'a été trouvé dans cette image.");
 }
 
-export default function ImportScenarioModal({ onClose, onImported }) {
+export default function ImportScenarioModal({ electionId, onClose, onImported }) {
   const inputRef = useRef(null);
   const [payload, setPayload] = useState(null);
   const [error, setError] = useState("");
@@ -125,7 +125,9 @@ export default function ImportScenarioModal({ onClose, onImported }) {
     setBusy(true);
     setError("");
     try {
-      const imported = await api.importSimulation(payload);
+      const imported = electionId == null
+        ? await api.importSimulation(payload)
+        : await api.importSimulation(electionId, payload);
       await onImported(imported);
     } catch (importError) {
       setError(importError.message || "L'import a échoué.");

@@ -10,8 +10,10 @@ de voix, calcul automatique du 2e tour et visualisation des flux via un
 diagramme de Sankey.
 
 Les données sont stockées **uniquement dans le navigateur** de l'utilisateur
-(`localStorage`, clé `election-simulation:v1`). Aucun serveur applicatif :
-l'application est publiée sur GitHub Pages.
+(`localStorage`, clé `election-simulation:v2`). Au premier accès, les données
+de `election-simulation:v1` sont migrées localement vers une élection existante;
+la clé v1 est conservée. Aucun serveur applicatif : l'application est publiée
+sur GitHub Pages.
 
 > Trade-offs : les scénarios ne sont pas synchronisés entre navigateurs ou
 > appareils, et sont perdus si l'utilisateur vide les données du site. Utiliser
@@ -20,7 +22,9 @@ l'application est publiée sur GitHub Pages.
 ## Fonctionnalités
 
 - Créer, dupliquer et supprimer des simulations
-- Naviguer entre les différentes simulations
+- Créer plusieurs élections et regrouper les simulations dans des workspaces
+- Gérer le référentiel de candidats et partis de chaque élection
+- Naviguer entre élections et simulations
 - Faire varier le nombre d'inscrits et l'abstention du 1er tour
 - Saisir les résultats du 1er tour (candidat, pourcentage) dans un tableau
   éditable façon tableur (navigation au clavier, ajout de ligne à la volée,
@@ -40,8 +44,6 @@ l'application est publiée sur GitHub Pages.
 
 ## Fonctionnalités à venir
 
-- Gestion des élections
-- Groupement des simulations par élection
 - Gestion des sources : sondages, résultats d'élections précédentes et
   reports de voix
 
@@ -84,7 +86,9 @@ Pour arrêter : `Ctrl+C`, puis (optionnel) `docker compose down`.
 ### Réinitialiser les données
 
 Dans le navigateur : outils de développement → Application → Local Storage →
-supprimer la clé `election-simulation:v1` (ou effacer les données du site).
+supprimer les clés `election-simulation:v2` et `election-simulation:v1` (ou
+effacer les données du site). La clé v1 n'est conservée que pour rendre la
+migration récupérable; les écritures ultérieures sont faites en v2.
 
 ## Déploiement sur GitHub Pages
 
@@ -95,28 +99,30 @@ Activation (une seule fois) : **Settings → Pages → Build and deployment →
 Source : GitHub Actions**.
 
 Le build utilise des chemins relatifs (`base: "./"`) et un routage par hash
-(`#/simulations/1`), ce qui fonctionne sous `https://<user>.github.io/<repo>/`
+(`#/elections/1/simulations/1`), ce qui fonctionne sous `https://<user>.github.io/<repo>/`
 sans configuration supplémentaire.
 
 
 ## Utilisation
 
-1. Sur la page d'accueil, créer une simulation (nom libre, ex : "Présidentielle
-   2027 – scénario A").
-2. Dans la simulation :
+1. Depuis le panneau de gauche, créer une élection (workspace), puis un scénario
+  (ex. « Présidentielle 2027 – scénario A »).
+2. Dans la configuration de l'élection, gérer le référentiel de candidats et
+  leurs partis. Leurs noms sont suggérés dans tous les scénarios du workspace.
+3. Dans la simulation :
    - Renseigner le nombre d'inscrits et l'abstention du 1er tour.
-   - Ajouter les candidats du 1er tour (nom, parti, % de voix).
+  - Ajouter les candidats du 1er tour (nom, % de voix); leur parti est géré dans le référentiel de l'élection.
    - Renseigner, pour chaque candidat, la répartition de ses voix au 2e tour
      (% vers chacun des 2 finalistes + % d'abstention). Chaque ligne doit
      idéalement totaliser 100 %.
    - Consulter les résultats calculés du 2e tour et le diagramme de Sankey.
-3. Depuis la liste des simulations, dupliquer une simulation permet de créer
+4. Depuis la liste des simulations, dupliquer une simulation permet de créer
    rapidement une variante (autre hypothèse de reports de voix, autre niveau
    d'abstention, etc.).
-4. Pour partager un scénario, cliquer sur **Partager** dans son en-tête :
+5. Pour partager un scénario, cliquer sur **Partager** dans son en-tête :
   copier le lien (`https://<baseUrl>/#/import?content=...`) ou télécharger
   le QR code, qui contient ce même lien.
-5. Le destinataire ouvre le lien (ou scanne le QR code) puis confirme
+6. Le destinataire ouvre le lien (ou scanne le QR code) puis confirme
   l'import. Il est aussi possible, depuis la barre latérale, de cliquer sur
   **Importer un scénario** et de fournir l'image du QR code (fichier ou
   presse-papiers).
@@ -130,10 +136,11 @@ pas le calcul (utile pour explorer des scénarios en cours de saisie).
 ```
 frontend/
   src/
-    App.jsx                    # Routes (react-router, HashRouter) + layout général
-    api.js                     # Persistance localStorage (même interface que l'ancienne API)
-    context/SimulationsContext.jsx  # Liste des simulations partagée (sidebar + pages)
+    App.jsx                    # Routes workspaces (react-router, HashRouter)
+    api.js                     # Persistance localStorage et migration v1 vers v2
+    context/SimulationsContext.jsx  # Élections et scénarios actifs partagés
     hooks/useGridNavigation.js # Navigation clavier façon tableur dans les tableaux éditables
+    components/EditableTable.jsx # Enveloppe configurable partagée par les tableaux éditables
     utils/simulationEngine.js  # Calcul du 2e tour + données du Sankey + sérialisation
     utils/debounceByKey.js     # Auto-sauvegarde différée par champ (sans bouton "Enregistrer")
     utils/scenarioExchange.js  # Contrat versionné, compression et validation du QR

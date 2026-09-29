@@ -2,21 +2,104 @@
 import { serializeSimulation } from "./utils/simulationEngine.js";
 import { validateScenarioPayload } from "./utils/scenarioExchange.js";
 
-const STORAGE_KEY = "election-simulation:v1";
+const STORAGE_KEY = "election-simulation:v2";
+const LEGACY_STORAGE_KEY = "election-simulation:v1";
 
 let memoryFallback = null;
 
 function emptyState() {
-  return { nextSimulationId: 1, nextCandidateId: 1, simulations: [] };
+  return {
+    version: 2,
+    nextElectionId: 1,
+    nextElectionCandidateId: 1,
+    nextSimulationId: 1,
+    nextCandidateId: 1,
+    elections: [],
+    simulations: [],
+  };
+}
+
+function maxId(records) {
+  return records.reduce((max, record) => Math.max(max, Number(record.id) || 0), 0);
+}
+
+function normalizeState(raw) {
+  if (!raw || !Array.isArray(raw.simulations)) return emptyState();
+  const state = {
+    ...emptyState(),
+    ...raw,
+    elections: Array.isArray(raw.elections) ? raw.elections.map((election, index) => ({
+      ...election,
+      id: Number(election.id) || index + 1,
+      name: String(election.name || "Nouvelle élection"),
+      position: Number.isFinite(Number(election.position)) ? Number(election.position) : index + 1,
+      candidates: Array.isArray(election.candidates) ? election.candidates.map((candidate, candidateIndex) => ({
+        ...candidate,
+        id: Number(candidate.id) || candidateIndex + 1,
+        name: String(candidate.name || ""),
+        party: String(candidate.party || ""),
+      })) : [],
+    })) : [],
+    simulations: raw.simulations.map((simulation, index) => ({
+      ...simulation,
+      id: Number(simulation.id) || index + 1,
+      election_id: Number.isFinite(Number(simulation.election_id)) ? Number(simulation.election_id) : null,
+      position: Number.isFinite(Number(simulation.position)) ? Number(simulation.position) : index + 1,
+      candidates: Array.isArray(simulation.candidates) ? simulation.candidates : [],
+    })),
+  };
+  const unassigned = state.simulations.filter((simulation) =>
+    !state.elections.some((election) => election.id === Number(simulation.election_id))
+  );
+  if (unassigned.length) {
+    const election = {
+      id: maxId(state.elections) + 1,
+      name: "Élection existante",
+      position: state.elections.length + 1,
+      candidates: [],
+    };
+    const candidateNames = new Set();
+    for (const simulation of unassigned) {
+      simulation.election_id = election.id;
+      for (const candidate of simulation.candidates || []) {
+        const name = String(candidate.name || "").trim();
+        if (!name || candidateNames.has(name)) continue;
+        candidateNames.add(name);
+        election.candidates.push({ id: state.nextElectionCandidateId++, name, party: "" });
+      }
+    }
+    state.elections.push(election);
+  }
+  state.nextElectionId = Math.max(Number(state.nextElectionId) || 1, maxId(state.elections) + 1);
+  state.nextElectionCandidateId = Math.max(
+    Number(state.nextElectionCandidateId) || 1,
+    ...state.elections.flatMap((election) => [maxId(election.candidates) + 1])
+  );
+  state.nextSimulationId = Math.max(Number(state.nextSimulationId) || 1, maxId(state.simulations) + 1);
+  state.nextCandidateId = Math.max(
+    Number(state.nextCandidateId) || 1,
+    ...state.simulations.flatMap((simulation) => [maxId(simulation.candidates || []) + 1])
+  );
+  state.version = 2;
+  return state;
 }
 
 function loadState() {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return emptyState();
-    const state = JSON.parse(raw);
-    if (!state || !Array.isArray(state.simulations)) return emptyState();
-    return state;
+    if (typeof window === "undefined") return memoryFallback ?? emptyState();
+    const current = window.localStorage.getItem(STORAGE_KEY);
+    if (current) {
+      try {
+        const parsed = JSON.parse(current);
+        if (parsed && Array.isArray(parsed.simulations)) return normalizeState(parsed);
+      } catch {
+      }
+    }
+    const legacy = window.localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (!legacy) return emptyState();
+    const migrated = normalizeState(JSON.parse(legacy));
+    saveState(migrated);
+    return migrated;
   } catch {
     // localStorage indisponible (navigation privée stricte, etc.) : on garde les données en mémoire.
     return memoryFallback ?? emptyState();
@@ -55,16 +138,52 @@ function findCandidate(simulation, candidateId) {
   return candidate;
 }
 
-function nextPosition(state) {
-  return state.simulations.reduce((max, s) => Math.max(max, s.position), 0) + 1;
+function nextPosition(state, electionId) {
+  return state.simulations
+    .filter((simulation) => simulation.election_id === electionId)
+    .reduce((max, simulation) => Math.max(max, simulation.position), 0) + 1;
 }
 
-function createSimulationRecord(state, fields) {
+function findElection(state, id) {
+  const election = state.elections.find((item) => item.id === Number(id));
+  if (!election) throw new Error("Élection introuvable.");
+  return election;
+}
+
+function ensureDefaultElection(state) {
+  if (!state.elections.length) {
+    state.elections.push({
+      id: state.nextElectionId++,
+      name: "Nouvelle élection",
+      position: 1,
+      candidates: [],
+    });
+  }
+  return state.elections[0];
+}
+
+function registerElectionCandidate(state, electionId, name, party = "") {
+  const election = findElection(state, electionId);
+  const candidateName = String(name || "").trim();
+  if (!candidateName) return;
+  const existing = election.candidates.find((candidate) => candidate.name === candidateName);
+  if (existing) {
+    if (party && !existing.party) existing.party = party;
+    return existing;
+  }
+  const candidate = { id: state.nextElectionCandidateId++, name: candidateName, party: String(party || "").trim() };
+  election.candidates.push(candidate);
+  return candidate;
+}
+
+function createSimulationRecord(state, electionId, fields) {
+  const election = findElection(state, electionId);
   const simulation = {
     id: state.nextSimulationId++,
+    election_id: election.id,
     name: "Nouvelle simulation",
     description: "",
-    position: nextPosition(state),
+    position: nextPosition(state, election.id),
     created_at: new Date().toISOString(),
     total_inscrits: 1000,
     abstention_r1: 0,
@@ -80,6 +199,7 @@ function createSimulationRecord(state, fields) {
 function createCandidateRecord(state, simulation, { name, pct_r1 = 0, pct_to_a = 0, pct_to_b = 0 }) {
   const candidate = { id: state.nextCandidateId++, name, pct_r1, transfer: { pct_to_a, pct_to_b } };
   simulation.candidates.push(candidate);
+  registerElectionCandidate(state, simulation.election_id, name);
   return candidate;
 }
 
@@ -90,13 +210,124 @@ function mutate(id, apply) {
     const simulation = findSimulation(state, id);
     const extra = apply(simulation, state);
     saveState(state);
-    return { ...serializeSimulation(simulation), ...extra };
+    return { ...serializeSimulation(simulation), election_id: simulation.election_id, ...extra };
   });
 }
 
 export const api = {
-  listSimulations: async () =>
+  listElections: async () => {
+    const state = loadState();
+    return [...state.elections]
+      .sort((a, b) => a.position - b.position || a.id - b.id)
+      .map((election) => ({
+        id: election.id,
+        name: election.name,
+        position: election.position,
+        scenarios_count: state.simulations.filter((simulation) => simulation.election_id === election.id).length,
+      }));
+  },
+
+  getElection: async (id) => {
+    const state = loadState();
+    const election = findElection(state, id);
+    return {
+      ...election,
+      scenarios_count: state.simulations.filter((simulation) => simulation.election_id === election.id).length,
+    };
+  },
+
+  createElection: async (name) => {
+    const state = loadState();
+    const election = {
+      id: state.nextElectionId++,
+      name: (name || "").trim() || "Nouvelle élection",
+      position: state.elections.length + 1,
+      candidates: [],
+    };
+    state.elections.push(election);
+    saveState(state);
+    return { ...election, scenarios_count: 0 };
+  },
+
+  updateElection: async (id, payload) => {
+    const state = loadState();
+    const election = findElection(state, id);
+    const name = (payload.name || "").trim();
+    if (!name) throw new Error("Le nom de l'élection est obligatoire.");
+    election.name = name;
+    saveState(state);
+    return { ...election, scenarios_count: state.simulations.filter((simulation) => simulation.election_id === election.id).length };
+  },
+
+  deleteElection: async (id) => {
+    const state = loadState();
+    state.elections = state.elections.filter((election) => election.id !== Number(id));
+    state.simulations = state.simulations.filter((simulation) => simulation.election_id !== Number(id));
+    saveState(state);
+    return { status: "ok" };
+  },
+
+  listElectionCandidates: async (electionId) => {
+    const state = loadState();
+    const election = findElection(state, electionId);
+    return [...election.candidates]
+      .sort((a, b) => a.name.localeCompare(b.name, "fr"))
+      .map((candidate) => ({
+        ...candidate,
+        usage_count: state.simulations
+          .filter((simulation) => simulation.election_id === election.id)
+          .reduce((count, simulation) => count + simulation.candidates.filter((item) => item.name === candidate.name).length, 0),
+      }));
+  },
+
+  createElectionCandidate: async (electionId, payload) => {
+    const state = loadState();
+    const election = findElection(state, electionId);
+    const name = (payload.name || "").trim();
+    if (!name) throw new Error("Le nom du candidat est obligatoire.");
+    if (election.candidates.some((candidate) => candidate.name === name)) {
+      throw new Error("Ce candidat existe déjà dans cette élection.");
+    }
+    registerElectionCandidate(state, election.id, name, payload.party);
+    saveState(state);
+    return api.listElectionCandidates(election.id);
+  },
+
+  updateElectionCandidate: async (electionId, candidateId, payload) => {
+    const state = loadState();
+    const election = findElection(state, electionId);
+    const candidate = election.candidates.find((item) => item.id === Number(candidateId));
+    if (!candidate) throw new Error("Candidat introuvable.");
+    const oldName = candidate.name;
+    if ("name" in payload) {
+      const name = (payload.name || "").trim();
+      if (!name) throw new Error("Le nom du candidat est obligatoire.");
+      if (election.candidates.some((item) => item.id !== candidate.id && item.name === name)) {
+        throw new Error("Ce nom est déjà utilisé par un autre candidat de l'élection.");
+      }
+      candidate.name = name;
+      for (const simulation of state.simulations.filter((item) => item.election_id === election.id)) {
+        for (const scenarioCandidate of simulation.candidates) {
+          if (scenarioCandidate.name === oldName) scenarioCandidate.name = name;
+        }
+      }
+    }
+    if ("party" in payload) candidate.party = (payload.party || "").trim();
+    saveState(state);
+    return api.listElectionCandidates(election.id);
+  },
+
+  deleteElectionCandidate: async (electionId, candidateId) => {
+    const state = loadState();
+    const election = findElection(state, electionId);
+    election.candidates = election.candidates.filter((candidate) => candidate.id !== Number(candidateId));
+    saveState(state);
+    return api.listElectionCandidates(election.id);
+  },
+
+  listSimulations: async (electionId) =>
     [...loadState().simulations]
+      .filter((simulation) => electionId == null || simulation.election_id === Number(electionId))
       .sort((a, b) => a.position - b.position || a.id - b.id)
       .map((s) => ({
         id: s.id,
@@ -106,21 +337,36 @@ export const api = {
         candidates_count: s.candidates.length,
       })),
 
-  getSimulation: async (id) => serializeSimulation(findSimulation(loadState(), id)),
-
-  createSimulation: async (name) => {
+  getSimulation: async (id, simulationId) => {
     const state = loadState();
-    const simulation = createSimulationRecord(state, { name: (name || "").trim() || "Nouvelle simulation" });
-    saveState(state);
-    return serializeSimulation(simulation);
+    const simulation = findSimulation(state, simulationId ?? id);
+    if (simulationId != null && simulation.election_id !== Number(id)) throw new Error("Scénario introuvable.");
+    return { ...serializeSimulation(simulation), election_id: simulation.election_id };
   },
 
-  importSimulation: async (payload) => {
+  createSimulation: async (electionId, name) => {
+    if (name === undefined) {
+      name = electionId;
+      electionId = null;
+    }
+    const state = loadState();
+    const election = electionId == null ? ensureDefaultElection(state) : findElection(state, electionId);
+    const simulation = createSimulationRecord(state, election.id, { name: (name || "").trim() || "Nouvelle simulation" });
+    saveState(state);
+    return { ...serializeSimulation(simulation), election_id: election.id };
+  },
+
+  importSimulation: async (electionId, payload) => {
+    if (payload === undefined) {
+      payload = electionId;
+      electionId = null;
+    }
     const { scenario } = validateScenarioPayload(payload);
     const now = new Date();
     const dateSuffix = ` (${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")})`;
     const state = loadState();
-    const simulation = createSimulationRecord(state, {
+    const election = electionId == null ? ensureDefaultElection(state) : findElection(state, electionId);
+    const simulation = createSimulationRecord(state, election.id, {
       name: `${scenario.name.slice(0, 200 - dateSuffix.length)}${dateSuffix}`,
       description: scenario.description,
       total_inscrits: scenario.total_inscrits,
@@ -130,14 +376,18 @@ export const api = {
     });
     for (const candidate of scenario.candidates) createCandidateRecord(state, simulation, candidate);
     saveState(state);
-    return serializeSimulation(simulation);
+    return { ...serializeSimulation(simulation), election_id: election.id };
   },
 
-  reorderSimulations: async (order) => {
+  reorderSimulations: async (electionId, order) => {
+    if (order === undefined) {
+      order = electionId;
+      electionId = null;
+    }
     const state = loadState();
     order.forEach((simId, index) => {
       const simulation = state.simulations.find((s) => s.id === Number(simId));
-      if (simulation) simulation.position = index;
+      if (simulation && (electionId == null || simulation.election_id === Number(electionId))) simulation.position = index;
     });
     saveState(state);
     return { status: "ok" };
@@ -164,7 +414,7 @@ export const api = {
   duplicateSimulation: async (id) => {
     const state = loadState();
     const original = findSimulation(state, id);
-    const copy = createSimulationRecord(state, {
+    const copy = createSimulationRecord(state, original.election_id, {
       name: `${original.name} (copie)`,
       description: original.description,
       total_inscrits: original.total_inscrits,
@@ -176,7 +426,7 @@ export const api = {
       createCandidateRecord(state, copy, { name: c.name, pct_r1: c.pct_r1, ...c.transfer });
     }
     saveState(state);
-    return serializeSimulation(copy);
+    return { ...serializeSimulation(copy), election_id: copy.election_id };
   },
 
   deleteSimulation: async (id) => {
@@ -190,16 +440,20 @@ export const api = {
     mutate(id, (simulation, state) => {
       const name = (data.name || "").trim();
       if (!name) throw new Error("Le nom du candidat est obligatoire.");
+      registerElectionCandidate(state, simulation.election_id, name);
       const candidate = createCandidateRecord(state, simulation, { name, pct_r1: toFloat(data.pct_r1, 0) });
       return { new_candidate_id: candidate.id };
     }),
 
   updateCandidate: (id, candidateId, data) =>
-    mutate(id, (simulation) => {
+    mutate(id, (simulation, state) => {
       const candidate = findCandidate(simulation, candidateId);
       if ("name" in data) {
         const name = (data.name || "").trim();
-        if (name) candidate.name = name;
+        if (name) {
+          candidate.name = name;
+          registerElectionCandidate(state, simulation.election_id, name);
+        }
       }
       if ("pct_r1" in data) candidate.pct_r1 = Math.max(toFloat(data.pct_r1, candidate.pct_r1), 0);
     }),

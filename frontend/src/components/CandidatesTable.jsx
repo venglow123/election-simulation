@@ -1,11 +1,9 @@
-import { useRef, useState } from "react";
-import { useGridNavigation } from "../hooks/useGridNavigation.js";
+import { useState } from "react";
+import CandidateAutocomplete from "./CandidateAutocomplete.jsx";
+import EditableTable from "./EditableTable.jsx";
 
-export default function CandidatesTable({ simulation, onFieldChange, onCreate, onDelete }) {
-  const tableRef = useRef(null);
+export default function CandidatesTable({ simulation, candidateOptions = [], onFieldChange, onCreate, onDelete }) {
   const [draft, setDraft] = useState({ name: "", pct_r1: "" });
-
-  useGridNavigation(tableRef, { onEnterLastRow: () => submitDraft() });
 
   function submitDraft() {
     const name = draft.name.trim();
@@ -21,75 +19,78 @@ export default function CandidatesTable({ simulation, onFieldChange, onCreate, o
   return (
     <div className="panel">
       <h2>Résultats du 1er tour</h2>
-      <table className="data-table grid-table" ref={tableRef}>
-        <thead>
-          <tr>
-            <th>Candidat</th>
-            <th>% 1er tour</th>
-            <th>Voix</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {simulation.candidates.map((c) => (
-            <tr key={c.id}>
-              <td>
-                <input
-                  type="text"
-                  className="grid-input"
-                  value={c.name}
-                  onChange={(e) => onFieldChange(c.id, "name", e.target.value)}
+      <EditableTable
+        columns={[
+          {
+            key: "candidate",
+            label: "Candidat",
+            render: (candidate) => (
+                <CandidateAutocomplete
+                  value={candidate.name}
+                  options={candidateOptions}
+                  ariaLabel="Nom du candidat"
+                  onChange={(name) => onFieldChange(candidate.id, "name", name)}
                 />
-              </td>
-              <td>
+            ),
+          },
+          {
+            key: "pct_r1",
+            label: "% 1er tour",
+            render: (candidate) => (
                 <input
                   type="text"
                   inputMode="decimal"
                   className="grid-input"
-                  value={c.pct_r1}
-                  onChange={(e) => onFieldChange(c.id, "pct_r1", e.target.value)}
+                  value={candidate.pct_r1}
+                  onChange={(event) => onFieldChange(candidate.id, "pct_r1", event.target.value)}
                 />
-              </td>
-              <td className="votes-cell">{c.votes_r1}</td>
-              <td>
+            ),
+          },
+          { key: "votes", label: "Voix", cellClassName: "votes-cell", render: (candidate) => candidate.votes_r1 },
+          {
+            key: "actions",
+            label: "",
+            render: (candidate) => (
                 <button
                   type="button"
                   className="danger row-delete"
                   title="Supprimer"
                   onClick={() => {
-                    if (confirm(`Supprimer « ${c.name} » ?`)) onDelete(c.id);
+                    if (confirm(`Supprimer « ${candidate.name} » ?`)) onDelete(candidate.id);
                   }}
                 >
                   ✕
                 </button>
-              </td>
-            </tr>
-          ))}
-          <tr className="new-row">
-            <td>
-              <input
-                type="text"
-                className="grid-input"
-                placeholder="Ajouter un candidat…"
+            ),
+          },
+        ]}
+        rows={simulation.candidates}
+        getRowKey={(candidate) => candidate.id}
+        renderDraftCell={(column) => {
+          if (column.key === "candidate") return (
+              <CandidateAutocomplete
                 value={draft.name}
-                onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+                options={candidateOptions}
+                ariaLabel="Ajouter un candidat"
+                placeholder="Ajouter un candidat…"
+                onChange={(name) => setDraft((current) => ({ ...current, name }))}
+                onEnterCommit={(name) => submitDraft(name)}
               />
-            </td>
-            <td>
+          );
+          if (column.key === "pct_r1") return (
               <input
                 type="text"
                 inputMode="decimal"
                 className="grid-input"
                 placeholder="0"
                 value={draft.pct_r1}
-                onChange={(e) => setDraft((d) => ({ ...d, pct_r1: e.target.value }))}
+                onChange={(event) => setDraft((current) => ({ ...current, pct_r1: event.target.value }))}
               />
-            </td>
-            <td className="votes-cell">—</td>
-            <td></td>
-          </tr>
-        </tbody>
-        <tfoot>
+          );
+          return column.key === "votes" ? "—" : null;
+        }}
+        onEnterLastRow={submitDraft}
+        footer={(
           <tr>
             <td>Total</td>
             <td className={`total-cell ${Math.abs(totalPct - 100) <= 0.01 ? "total-ok" : "total-warn"}`}>
@@ -97,8 +98,8 @@ export default function CandidatesTable({ simulation, onFieldChange, onCreate, o
             </td>
             <td colSpan={2}></td>
           </tr>
-        </tfoot>
-      </table>
+        )}
+      />
       <p className="hint">
         Cliquez dans une cellule vide en bas du tableau pour ajouter un candidat. Naviguez avec les flèches
         ↑↓←→ ou <kbd>Tab</kbd>, validez une ligne avec <kbd>Entrée</kbd>. Tout est enregistré automatiquement.

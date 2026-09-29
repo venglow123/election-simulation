@@ -7,7 +7,7 @@ import { decodeScenarioContent } from "../utils/scenarioExchange.js";
 export default function ImportFromLink() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { refresh } = useSimulations();
+  const { refreshElections, selectElection } = useSimulations();
   const [busy, setBusy] = useState(false);
   const [importError, setImportError] = useState("");
 
@@ -25,8 +25,9 @@ export default function ImportFromLink() {
     setImportError("");
     try {
       const imported = await api.importSimulation(payload);
-      await refresh();
-      navigate(`/simulations/${imported.id}`, { replace: true });
+      await refreshElections();
+      await selectElection(imported.election_id);
+      navigate(`/elections/${imported.election_id}/simulations/${imported.id}`, { replace: true });
     } catch (failure) {
       setImportError(failure.message || "L'import a échoué.");
       setBusy(false);

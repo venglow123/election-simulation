@@ -16,10 +16,13 @@ import WarningsPanel from "./WarningsPanel.jsx";
 const SAVE_DELAY = 400;
 
 export default function SimulationPage() {
-  const { id } = useParams();
+  const { electionId: routeElectionId, simulationId, id: legacyId } = useParams();
+  const id = simulationId || legacyId;
+  const electionId = Number(routeElectionId);
   const navigate = useNavigate();
   const { refresh: refreshSidebar } = useSimulations();
   const [sim, setSim] = useState(null);
+  const [candidateOptions, setCandidateOptions] = useState([]);
   const [notFound, setNotFound] = useState(false);
   const [isSankeyDetailOpen, setIsSankeyDetailOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
@@ -28,10 +31,10 @@ export default function SimulationPage() {
     let cancelled = false;
     setSim(null);
     setNotFound(false);
-    api
-      .getSimulation(id)
-      .then((data) => {
+    Promise.all([api.getSimulation(electionId, id), api.listElectionCandidates(electionId)])
+      .then(([data, options]) => {
         if (!cancelled) setSim(data);
+        if (!cancelled) setCandidateOptions(options);
       })
       .catch(() => {
         if (!cancelled) setNotFound(true);
@@ -39,7 +42,7 @@ export default function SimulationPage() {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [electionId, id]);
 
   const applyState = useCallback((data) => setSim(data), []);
 
@@ -77,10 +80,13 @@ export default function SimulationPage() {
           : prev
       );
       debounceByKey(`candidate:${candidateId}:${field}`, () => {
-        api.updateCandidate(id, candidateId, { [field]: value }).then(applyState);
+        api.updateCandidate(id, candidateId, { [field]: value }).then(async (data) => {
+          applyState(data);
+          if (field === "name") setCandidateOptions(await api.listElectionCandidates(electionId));
+        });
       }, SAVE_DELAY);
     },
-    [id, applyState]
+    [id, electionId, applyState]
   );
 
   const saveTransferField = useCallback(
@@ -115,12 +121,13 @@ export default function SimulationPage() {
   async function handleDuplicate() {
     const copy = await api.duplicateSimulation(id);
     await refreshSidebar();
-    navigate(`/simulations/${copy.id}`);
+    navigate(`/elections/${electionId}/simulations/${copy.id}`);
   }
 
   async function handleCreateCandidate(payload) {
     const data = await api.addCandidate(id, payload);
     applyState(data);
+    setCandidateOptions(await api.listElectionCandidates(electionId));
     refreshSidebar();
     return data;
   }
@@ -148,6 +155,7 @@ export default function SimulationPage() {
           <SettingsPanel simulation={sim} onFieldChange={saveSettingsField} />
           <CandidatesTable
             simulation={sim}
+            candidateOptions={candidateOptions}
             onFieldChange={saveCandidateField}
             onCreate={handleCreateCandidate}
             onDelete={handleDeleteCandidate}
