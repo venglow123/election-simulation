@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   frontend-build:
-    name: Frontend tests & build
+    name: Frontend build
     runs-on: ubuntu-latest
     defaults:
       run:
