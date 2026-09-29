@@ -128,7 +128,7 @@ export default function ImportScenarioModal({ onClose, onImported }) {
       const imported = await api.importSimulation(payload);
       await onImported(imported);
     } catch (importError) {
-      setError(importError.message || "L'import a été refusé par le serveur.");
+      setError(importError.message || "L'import a échoué.");
       setBusy(false);
     }
   }
@@ -165,7 +165,7 @@ export default function ImportScenarioModal({ onClose, onImported }) {
               <button type="button" onClick={handleImport} disabled={busy}>{busy ? "Import en cours…" : "Importer le scénario"}</button>
             </div>
           )}
-          <p className="hint import-footnote">Les données sont vérifiées dans le navigateur puis à nouveau par l'API avant toute création.</p>
+          <p className="hint import-footnote">Les données sont vérifiées puis enregistrées uniquement dans ce navigateur.</p>
         </div>
       </section>
     </div>,

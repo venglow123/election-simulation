@@ -1,11 +1,5 @@
 .git
 .gitignore
-__pycache__
-*.pyc
-.venv
-venv
-data
-*.db
 .vscode
 frontend/node_modules
 frontend/dist

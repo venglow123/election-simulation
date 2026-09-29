@@ -616,6 +616,25 @@ button.danger:hover {
   width: min(100%, 512px);
 }
 
+.share-link-row {
+  display: flex;
+  gap: 8px;
+  width: min(100%, 512px);
+}
+
+.share-link-row input {
+  flex: 1;
+  min-width: 0;
+  font-family: monospace;
+  font-size: 0.8rem;
+}
+
+.import-link-page {
+  max-width: 640px;
+  margin: 48px auto;
+  padding: 0 24px;
+}
+
 .share-dialog-body,
 .import-dialog-body {
   overflow-y: auto;
