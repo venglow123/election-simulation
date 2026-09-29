@@ -62,7 +62,7 @@ export function useGridNavigation(containerRef, { onEnterLastRow } = {}) {
           prevRow[ci].focus();
           prevRow[ci].select();
         }
-      } else if (key === "ArrowRight" && target.selectionStart === target.value.length) {
+      } else if (key === "ArrowRight" && target.selectionEnd === target.value.length) {
         if (rows[ri][ci + 1]) {
           e.preventDefault();
           rows[ri][ci + 1].focus();

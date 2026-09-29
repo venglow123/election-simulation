@@ -14,7 +14,6 @@ export default function Sidebar() {
   const electionId = Number(electionMatch?.params.electionId) || null;
   const simulationId = simulationMatch?.params.simulationId;
   const navigate = useNavigate();
-  const [newName, setNewName] = useState("");
   const [draggedId, setDraggedId] = useState(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
 
@@ -22,14 +21,11 @@ export default function Sidebar() {
     if (electionId) selectElection(electionId).catch(() => navigate("/", { replace: true }));
   }, [electionId, selectElection, navigate]);
 
-  async function handleCreate(e) {
-    e.preventDefault();
-    const name = newName.trim();
-    if (!name || !electionId) return;
-    const sim = await api.createSimulation(electionId, name);
-    setNewName("");
+  async function handleCreate() {
+    if (!electionId) return;
+    const sim = await api.createSimulation(electionId, "Nouveau scénario");
     await refresh();
-    navigate(`/elections/${electionId}/simulations/${sim.id}`);
+    navigate(`/elections/${electionId}/simulations/${sim.id}`, { state: { focusTitle: true } });
   }
 
   async function handleDelete(simId, name) {
@@ -58,22 +54,35 @@ export default function Sidebar() {
     <aside className="sidebar">
       <WorkspaceSelector selectedElectionId={electionId} />
 
-      <form className="sidebar-new-form" onSubmit={handleCreate}>
-        <input
-          type="text"
-          placeholder="Nouveau scénario…"
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          disabled={!electionId}
-        />
-        <button type="submit" title="Créer un scénario" disabled={!electionId}>
-          +
-        </button>
-      </form>
-
-      <button type="button" className="sidebar-import-button" onClick={() => setIsImportOpen(true)} disabled={!electionId}>
-        ↓ Importer un scénario
-      </button>
+      <div className="sidebar-section-header">
+        <h2 className="sidebar-section-title">Scénarios</h2>
+        <div className="sidebar-section-actions">
+          <button
+            type="button"
+            className="sidebar-icon-button"
+            data-tooltip="Nouveau scénario"
+            aria-label="Nouveau scénario"
+            onClick={handleCreate}
+            disabled={!electionId}
+          >
+            +
+          </button>
+          <button
+            type="button"
+            className="sidebar-icon-button"
+            data-tooltip="Importer un scénario"
+            aria-label="Importer un scénario"
+            onClick={() => setIsImportOpen(true)}
+            disabled={!electionId}
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 3v12" />
+              <path d="m7 10 5 5 5-5" />
+              <path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" />
+            </svg>
+          </button>
+        </div>
+      </div>
 
       <nav className="sim-tabs">
         {simulations.length === 0 && <p className="sim-tabs-empty">Aucun scénario pour l'instant.</p>}
@@ -93,8 +102,8 @@ export default function Sidebar() {
             </span>
             <NavLink to={`/elections/${electionId}/simulations/${sim.id}`} className="sim-tab-link">
               <span className="sim-tab-name">{sim.name}</span>
-              <span className="sim-tab-meta">
-                {sim.candidates_count} candidat{sim.candidates_count !== 1 ? "s" : ""}
+              <span className="sim-tab-meta" title={`${sim.candidates_count} candidat${sim.candidates_count !== 1 ? "s" : ""}`}>
+                {sim.candidates_count}
               </span>
             </NavLink>
             <div className="sim-tab-delete">
@@ -112,7 +121,7 @@ export default function Sidebar() {
           onImported={async (simulation) => {
             await refresh();
             setIsImportOpen(false);
-            navigate(`/elections/${electionId}/simulations/${simulation.id}`);
+            navigate(`/elections/${electionId}/simulations/${simulation.id}`, { state: { focusTitle: true } });
           }}
         />
       )}

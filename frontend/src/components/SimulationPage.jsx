@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api.js";
 import { useSimulations } from "../context/SimulationsContext.jsx";
 import { debounceByKey } from "../utils/debounceByKey.js";
@@ -20,6 +20,7 @@ export default function SimulationPage() {
   const id = simulationId || legacyId;
   const electionId = Number(routeElectionId);
   const navigate = useNavigate();
+  const location = useLocation();
   const { refresh: refreshSidebar } = useSimulations();
   const [sim, setSim] = useState(null);
   const [candidateOptions, setCandidateOptions] = useState([]);
@@ -118,10 +119,15 @@ export default function SimulationPage() {
     [id, applyState]
   );
 
+  // Clear the one-shot navigation flag so a reload or back navigation doesn't refocus the title.
+  const clearFocusTitleFlag = useCallback(() => {
+    navigate(location.pathname, { replace: true, state: null });
+  }, [navigate, location.pathname]);
+
   async function handleDuplicate() {
     const copy = await api.duplicateSimulation(id);
     await refreshSidebar();
-    navigate(`/elections/${electionId}/simulations/${copy.id}`);
+    navigate(`/elections/${electionId}/simulations/${copy.id}`, { state: { focusTitle: true } });
   }
 
   async function handleCreateCandidate(payload) {
@@ -148,6 +154,8 @@ export default function SimulationPage() {
         onFieldChange={saveMetaField}
         onDuplicate={handleDuplicate}
         onShare={() => setIsShareOpen(true)}
+        autoFocusTitle={Boolean(location.state?.focusTitle) && String(sim.id) === String(id)}
+        onTitleFocused={clearFocusTitleFlag}
       />
       <WarningsPanel warnings={sim.warnings} />
       <div className="content-grid">

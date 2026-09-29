@@ -71,58 +71,83 @@ h2 {
   color: #9ca3af;
 }
 
-.sidebar-new-form {
+.sidebar-section-header {
   display: flex;
-  gap: 6px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+  margin-bottom: -8px;
 }
 
-.sidebar-new-form input {
-  flex: 1;
-  min-width: 0;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  color: #f9fafb;
-  border-radius: 6px;
-  padding: 8px 10px;
-  font-size: 0.82rem;
-}
-
-.sidebar-new-form input::placeholder {
+.sidebar-section-title {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: #9ca3af;
 }
 
-.sidebar-new-form button {
-  background: var(--accent);
+.sidebar-section-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.sidebar-icon-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: transparent;
   border: none;
-  color: white;
   border-radius: 6px;
-  width: 34px;
-  flex-shrink: 0;
-  font-size: 1.1rem;
+  color: #d1d5db;
+  font-size: 1rem;
   line-height: 1;
   cursor: pointer;
 }
 
-.sidebar-new-form button:hover {
-  background: var(--accent-dark);
+.sidebar-icon-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
 }
 
-.sidebar-import-button {
-  width: 100%;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  color: #e5e7eb;
-  text-align: left;
+.sidebar-icon-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
-.sidebar-import-button:hover {
-  background: rgba(255, 255, 255, 0.14);
+/* Anchored to the right edge so the tooltip stays inside the scrollable sidebar. */
+.sidebar-icon-button[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 10;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #030712;
+  color: #f9fafb;
+  font-size: 0.72rem;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.sidebar-icon-button[data-tooltip]:hover:not(:disabled)::after,
+.sidebar-icon-button[data-tooltip]:focus-visible::after {
+  opacity: 1;
 }
 
 .sim-tabs {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   overflow-y: auto;
   flex: 1;
 }
@@ -138,8 +163,8 @@ h2 {
   display: flex;
   align-items: center;
   gap: 2px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  background: transparent;
   transition: background 0.15s ease;
   cursor: grab;
 }
@@ -171,9 +196,9 @@ h2 {
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 8px 4px;
+  align-items: baseline;
+  gap: 6px;
+  padding: 5px 4px;
   text-decoration: none;
   color: #e5e7eb;
 }
@@ -183,7 +208,9 @@ h2 {
 }
 
 .sim-tab-name {
-  font-size: 0.85rem;
+  flex: 1;
+  min-width: 0;
+  font-size: 0.83rem;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -191,6 +218,7 @@ h2 {
 }
 
 .sim-tab-meta {
+  flex-shrink: 0;
   font-size: 0.7rem;
   color: #9ca3af;
 }
@@ -207,8 +235,8 @@ h2 {
   border: none;
   color: #6b7280;
   cursor: pointer;
-  font-size: 0.78rem;
-  padding: 4px 6px;
+  font-size: 0.72rem;
+  padding: 2px 5px;
   border-radius: 4px;
   opacity: 0;
   transition: opacity 0.15s ease, background 0.15s ease;
