@@ -3,21 +3,9 @@ WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm ci
 COPY frontend/ ./
-RUN npm run build
+RUN npm test && npm run build
 
-FROM python:3.12-slim
-WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY app ./app
-COPY wsgi.py .
-COPY --from=frontend-build /frontend/dist ./frontend_dist
-
-ENV DATA_DIR=/app/data
-RUN mkdir -p /app/data
-
-EXPOSE 5000
-
-CMD ["gunicorn", "--preload", "--bind", "0.0.0.0:5000", "--workers", "2", "wsgi:app"]
+# Site 100 % statique : les données restent dans le navigateur (localStorage).
+FROM nginx:1.27-alpine
+COPY --from=frontend-build /frontend/dist /usr/share/nginx/html
+EXPOSE 80

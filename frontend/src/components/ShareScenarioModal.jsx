@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
-import { buildScenarioPayload, encodeScenarioPayload } from "../utils/scenarioExchange.js";
+import { buildScenarioPayload, buildShareUrl } from "../utils/scenarioExchange.js";
 
 const MATRIX_SIZE = 512;
 
@@ -14,7 +14,7 @@ async function drawMatrix(canvas, encoded) {
   const image = await new Promise((resolve, reject) => {
     const element = new Image();
     element.onload = () => resolve(element);
-    element.onerror = () => reject(new Error("Impossible de générer le Data Matrix."));
+    element.onerror = () => reject(new Error("Impossible de générer le QR code."));
     element.src = dataUrl;
   });
 
@@ -30,6 +30,8 @@ export default function ShareScenarioModal({ simulation, onClose }) {
   const canvasRef = useRef(null);
   const [error, setError] = useState("");
   const [ready, setReady] = useState(false);
+  const [shareUrl, setShareUrl] = useState("");
+  const [copied, setCopied] = useState("");
 
   useEffect(() => {
     function handleKeyDown(event) {
@@ -49,13 +51,15 @@ export default function ShareScenarioModal({ simulation, onClose }) {
     let cancelled = false;
     setReady(false);
     setError("");
+    setShareUrl("");
     async function render() {
       try {
-        const encoded = encodeScenarioPayload(buildScenarioPayload(simulation));
-        await drawMatrix(canvasRef.current, encoded);
+        const url = buildShareUrl(buildScenarioPayload(simulation));
+        if (!cancelled) setShareUrl(url);
+        await drawMatrix(canvasRef.current, url);
         if (!cancelled) setReady(true);
       } catch (renderError) {
-        if (!cancelled) setError(renderError.message || "Impossible de générer le Data Matrix.");
+        if (!cancelled) setError(renderError.message || "Impossible de générer le QR code.");
       }
     }
     render();
@@ -72,6 +76,15 @@ export default function ShareScenarioModal({ simulation, onClose }) {
     link.click();
   }
 
+  async function handleCopyLink() {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied("ok");
+    } catch {
+      setCopied("error");
+    }
+  }
+
   return (
     <div className="detail-overlay share-overlay" role="presentation" onMouseDown={onClose}>
       <section className="matrix-dialog" role="dialog" aria-modal="true" aria-labelledby="share-title" onMouseDown={(event) => event.stopPropagation()}>
@@ -84,7 +97,14 @@ export default function ShareScenarioModal({ simulation, onClose }) {
         </header>
         <div className="matrix-dialog-body">
           {error ? <p className="import-error" role="alert">{error}</p> : <canvas ref={canvasRef} className="matrix-preview" aria-label="Code carré de partage" />}
-          <button type="button" className="matrix-download" onClick={handleDownload} disabled={!ready}>↓ Télécharger le code</button>
+          <button type="button" className="matrix-download" onClick={handleDownload} disabled={!ready}>↓ Télécharger le QR code</button>
+          {shareUrl && (
+            <div className="share-link-row">
+              <input type="text" readOnly value={shareUrl} aria-label="Lien de partage" onFocus={(event) => event.target.select()} />
+              <button type="button" className="btn-ghost" onClick={handleCopyLink}>{copied === "ok" ? "✓ Copié" : "⧉ Copier le lien"}</button>
+            </div>
+          )}
+          {copied === "error" && <p className="hint">Copie impossible : sélectionnez le lien puis copiez-le manuellement.</p>}
         </div>
       </section>
     </div>

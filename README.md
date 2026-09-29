@@ -1,12 +1,21 @@
 # Simulateur de reports de voix – élections présidentielles (2 tours)
 
 [![CI](https://github.com/venglow123/election-simulation/actions/workflows/ci.yml/badge.svg)](https://github.com/venglow123/election-simulation/actions/workflows/ci.yml)
+[![Deploy GitHub Pages](https://github.com/venglow123/election-simulation/actions/workflows/deploy-pages.yml/badge.svg)](https://github.com/venglow123/election-simulation/actions/workflows/deploy-pages.yml)
 
-Application web (React + API JSON Flask, SQLite) permettant de créer et gérer
-des simulations d'élections à scrutin uninominal à 2 tours (type élection
-présidentielle française) : résultats du 1er tour, matrice de reports de voix,
-calcul automatique du 2e tour et visualisation des flux via un diagramme de
-Sankey.
+Application web 100 % statique (React + Vite, sans backend) permettant de créer
+et gérer des simulations d'élections à scrutin uninominal à 2 tours (type
+élection présidentielle française) : résultats du 1er tour, matrice de reports
+de voix, calcul automatique du 2e tour et visualisation des flux via un
+diagramme de Sankey.
+
+Les données sont stockées **uniquement dans le navigateur** de l'utilisateur
+(`localStorage`, clé `election-simulation:v1`). Aucun serveur applicatif :
+l'application est publiée sur GitHub Pages.
+
+> Trade-offs : les scénarios ne sont pas synchronisés entre navigateurs ou
+> appareils, et sont perdus si l'utilisateur vide les données du site. Utiliser
+> le partage par QR code pour transférer un scénario.
 
 ## Fonctionnalités
 
@@ -27,7 +36,7 @@ Sankey.
 - Export d'un scénario en image PNG carrée contenant uniquement le code de
   partage
 - Import d'un scénario depuis une image contenant un QR code, par fichier ou
-  presse-papiers, avec validation côté navigateur et côté API
+  presse-papiers, avec validation côté navigateur
 
 ## Fonctionnalités à venir
 
@@ -40,27 +49,12 @@ Sankey.
 > du 2e tour sont automatiquement les 2 candidats ayant obtenu le plus de voix
 > au 1er tour. La victoire dès le premier tour n'est pas prise en compte : le 2e tour est toujours calculé.
 
-## Prérequis
+## Prérequis (développement local)
 
-- [Docker](https://www.docker.com/) et Docker Compose (inclus dans Docker
-  Desktop, ou plugin `docker compose` sous Linux)
-
-Aucune installation de Node.js ou de Python n'est nécessaire sur le poste pour
-faire tourner l'application : le build du frontend React et l'exécution de
-l'API Flask se font entièrement dans les conteneurs Docker.
+- Soit [Docker](https://www.docker.com/) et Docker Compose,
+- soit Node.js 20+.
 
 ## Bibliothèques utilisées
-
-### Backend
-
-| Bibliothèque | Version | Usage |
-| --- | --- | --- |
-| Flask | 3.1.3 | API JSON et serveur de l'application |
-| Flask-SQLAlchemy | 3.1.1 | Accès à la base SQLite via SQLAlchemy |
-| Gunicorn | 22.0.0 | Serveur WSGI de production localisé dans le conteneur |
-| pytest | 9.0.3 | Tests unitaires |
-
-### Frontend
 
 | Bibliothèque | Version déclarée | Usage |
 | --- | --- | --- |
@@ -81,47 +75,28 @@ docker compose up --build
 
 Puis ouvrir : http://localhost:5000
 
-Le premier build télécharge les dépendances Node (frontend) et Python
-(backend) puis compile le frontend React en assets statiques servis par
-Flask. Cela peut prendre une minute ou deux. Les builds suivants sont plus
-rapides grâce au cache Docker.
+L'image Docker compile le frontend (tests inclus) puis sert les fichiers
+statiques via nginx. Aucune donnée n'est stockée côté conteneur : tout est
+dans le `localStorage` du navigateur.
 
 Pour arrêter : `Ctrl+C`, puis (optionnel) `docker compose down`.
 
-Les données sont stockées dans une base SQLite persistée dans un **volume
-Docker nommé** (`db-data`, déclaré dans `docker-compose.yml`), indépendant du
-cycle de vie des conteneurs. Elles survivent donc à `docker compose down`,
-aux redémarrages, reconstructions (`--build`) et mises à jour de l'image.
-
-> Un volume Docker nommé est utilisé plutôt qu'un dossier monté (`./data`)
-> pour éviter les problèmes de verrouillage de fichier SQLite parfois
-> observés avec les montages bind sur Docker Desktop (Windows/Mac), et pour
-> ne pas risquer de perdre les données si le dossier `./data` est supprimé ou
-> déplacé par erreur sur l'hôte.
-
 ### Réinitialiser les données
 
-```powershell
-docker compose down -v
-docker compose up --build
-```
+Dans le navigateur : outils de développement → Application → Local Storage →
+supprimer la clé `election-simulation:v1` (ou effacer les données du site).
 
-`-v` supprime le volume `db-data` (et donc toutes les simulations). Sans
-`-v`, `docker compose down` puis `docker compose up` conservent les données.
+## Déploiement sur GitHub Pages
 
-### Sauvegarder / restaurer les données
+Le workflow `.github/workflows/deploy-pages.yml` teste, build et publie
+`frontend/dist` à chaque push sur `main`.
 
-```powershell
-# Sauvegarder le fichier SQLite du volume vers l'hôte
-docker run --rm -v report-voix-elections_db-data:/data -v ${PWD}:/backup alpine `
-  cp /data/app.db /backup/app.db.bak
+Activation (une seule fois) : **Settings → Pages → Build and deployment →
+Source : GitHub Actions**.
 
-# Restaurer (le service doit être arrêté)
-docker compose stop
-docker run --rm -v report-voix-elections_db-data:/data -v ${PWD}:/backup alpine `
-  cp /backup/app.db.bak /data/app.db
-docker compose start
-```
+Le build utilise des chemins relatifs (`base: "./"`) et un routage par hash
+(`#/simulations/1`), ce qui fonctionne sous `https://<user>.github.io/<repo>/`
+sans configuration supplémentaire.
 
 
 ## Utilisation
@@ -138,11 +113,13 @@ docker compose start
 3. Depuis la liste des simulations, dupliquer une simulation permet de créer
    rapidement une variante (autre hypothèse de reports de voix, autre niveau
    d'abstention, etc.).
-4. Pour partager un scénario, cliquer sur **Partager** dans son en-tête, puis
-  télécharger l'image PNG carrée contenant uniquement le code de partage.
-5. Dans la barre latérale d'une autre instance, cliquer sur **Importer un
-  scénario**, choisir l'image exportée ou coller une image depuis le
-  presse-papiers, puis confirmer la création du nouveau scénario.
+4. Pour partager un scénario, cliquer sur **Partager** dans son en-tête :
+  copier le lien (`https://<baseUrl>/#/import?content=...`) ou télécharger
+  le QR code, qui contient ce même lien.
+5. Le destinataire ouvre le lien (ou scanne le QR code) puis confirme
+  l'import. Il est aussi possible, depuis la barre latérale, de cliquer sur
+  **Importer un scénario** et de fournir l'image du QR code (fichier ou
+  presse-papiers).
 
 Des avertissements s'affichent si la somme des pourcentages du 1er tour ou
 d'une ligne de la matrice de reports ne fait pas 100 %, mais cela n'empêche
@@ -151,80 +128,56 @@ pas le calcul (utile pour explorer des scénarios en cours de saisie).
 ## Structure du projet
 
 ```
-app/
-  __init__.py       # Factory Flask (config, init DB, blueprint API, service du SPA React)
-  models.py         # Modèles SQLAlchemy : Simulation, Candidate, Transfer
-  services.py       # Calcul des résultats du 2e tour + données du Sankey + sérialisation JSON
-  api.py            # Routes de l'API JSON (/api/simulations/...)
-  utils.py          # Conversions numériques tolérantes (to_int/to_float)
 frontend/
   src/
-    App.jsx                    # Routes (react-router) + layout général
-    api.js                     # Client HTTP vers /api/...
+    App.jsx                    # Routes (react-router, HashRouter) + layout général
+    api.js                     # Persistance localStorage (même interface que l'ancienne API)
     context/SimulationsContext.jsx  # Liste des simulations partagée (sidebar + pages)
     hooks/useGridNavigation.js # Navigation clavier façon tableur dans les tableaux éditables
+    utils/simulationEngine.js  # Calcul du 2e tour + données du Sankey + sérialisation
     utils/debounceByKey.js     # Auto-sauvegarde différée par champ (sans bouton "Enregistrer")
-    components/                # Sidebar, modales partage/import, tableaux, résultats, Sankey (SVG)
     utils/scenarioExchange.js  # Contrat versionné, compression et validation du QR
-  vite.config.js    # Dev server (proxy /api -> Flask) + build de production
-wsgi.py             # Point d'entrée WSGI (gunicorn)
-requirements.txt
-Dockerfile          # Multi-stage : build Node du frontend, puis image Python + assets buildés
+    components/                # Sidebar, modales partage/import, tableaux, résultats, Sankey (SVG)
+  vite.config.js    # Dev server + build statique (base relative)
+Dockerfile          # Multi-stage : build Node du frontend, puis nginx statique
 docker-compose.yml
 ```
 
-## Développement local sans reconstruire l'image Docker à chaque changement
-
-Pour itérer rapidement sur le frontend avec rechargement à chaud, lancez le
-backend et le frontend séparément :
+## Développement local avec rechargement à chaud
 
 ```powershell
-# Terminal 1 : API Flask (recharge auto activée)
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-$env:DATA_DIR = "./data"
-$env:FRONTEND_DIST = "./frontend/dist"   # ignoré tant que le frontend n'est pas buildé
-python wsgi.py
-```
-
-```powershell
-# Terminal 2 : frontend React avec rechargement à chaud (Vite)
 cd frontend
 npm install
 npm run dev
 ```
 
-Ouvrir http://localhost:5173 (Vite proxifie automatiquement les appels
-`/api/...` vers Flask sur le port 5000, voir `frontend/vite.config.js`).
+Ouvrir http://localhost:5173.
 
 ## Tests unitaires
 
 Les calculs de voix, les reports de voix, la remobilisation des abstentionnistes
-et la cohérence des flux Sankey sont couverts par pytest :
+et la cohérence des flux Sankey sont couverts par le test runner natif de Node :
 
 ```powershell
-python -m pytest -q
+cd frontend
+npm test
 ```
-
-Les dépendances de test sont incluses dans `requirements.txt`.
 
 ## Intégration continue
 
-GitHub Actions exécute automatiquement, sur chaque push vers `main` ou `master`
+GitHub Actions exécute automatiquement, sur chaque push vers `main`
 et sur chaque pull request :
 
-- les tests pytest ;
-- le build du frontend avec `npm ci` ;
-- le build de l'image Docker après réussite des deux contrôles précédents.
+- les tests unitaires et le build du frontend ;
+- le build de l'image Docker après réussite du contrôle précédent.
 
-La workflow est définie dans `.github/workflows/ci.yml`.
+La workflow est définie dans `.github/workflows/ci.yml` ; le déploiement dans
+`.github/workflows/deploy-pages.yml`.
 
 ## Limites connues
 
-- Outil pensé pour un usage local / de développement : pas d'authentification,
-  pas de protection CSRF/CORS spécifique (l'API et le frontend sont servis par
-  la même origine en production).
+- Données locales au navigateur : pas de synchronisation entre appareils, perte
+  en cas d'effacement des données du site.
 - Un seul type de scrutin est géré (uninominal majoritaire à 2 tours).
 - La victoire au 1er tour n'est pas prise en compte : le 2e tour est toujours calculé.
 - Le diagramme de Sankey est un composant React/SVG fait maison (pas de

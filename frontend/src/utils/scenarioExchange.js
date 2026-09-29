@@ -110,26 +110,41 @@ export function validateScenarioPayload(payload) {
   };
 }
 
-export function encodeScenarioPayload(payload) {
+export function encodeScenarioContent(payload) {
   const normalized = validateScenarioPayload(payload);
-  const encoded = `${QR_PREFIX}${bytesToBase64(compressSync(strToU8(JSON.stringify(normalized))))}`;
-  if (encoded.length > MAX_QR_TEXT_LENGTH) {
-    throw new Error("Ce scénario est trop volumineux pour être partagé par QR code.");
+  const content = bytesToBase64(compressSync(strToU8(JSON.stringify(normalized))));
+  if (content.length > MAX_QR_TEXT_LENGTH) {
+    throw new Error("Ce scénario est trop volumineux pour être partagé.");
   }
-  return encoded;
+  return content;
 }
 
-export function decodeScenarioPayload(text) {
-  if (typeof text !== "string" || !text.startsWith(QR_PREFIX)) {
-    throw new Error("Ce QR code ne correspond pas à un scénario partagé.");
-  }
-  if (text.length > MAX_QR_TEXT_LENGTH) throw new Error("Le QR code est trop volumineux.");
+// Lien absolu vers la route d'import de cette instance (fonctionne aussi sous /<repo>/ sur GitHub Pages).
+export function buildShareUrl(payload) {
+  const base = `${window.location.origin}${window.location.pathname}`;
+  return `${base}#/import?content=${encodeScenarioContent(payload)}`;
+}
+
+export function decodeScenarioContent(content) {
+  if (typeof content !== "string" || !content) throw new Error("Le lien de partage ne contient aucun scénario.");
+  if (content.length > MAX_QR_TEXT_LENGTH) throw new Error("Le contenu partagé est trop volumineux.");
+  if (!/^[A-Za-z0-9_-]+$/.test(content)) throw new Error("Le contenu partagé est illisible ou corrompu.");
   try {
-    return validateScenarioPayload(JSON.parse(strFromU8(decompressSync(base64ToBytes(text.slice(QR_PREFIX.length))))));
+    return validateScenarioPayload(JSON.parse(strFromU8(decompressSync(base64ToBytes(content)))));
   } catch (error) {
     if (error.message.includes("invalide") || error.message.includes("dépasse") || error.message.includes("compatible")) {
       throw error;
     }
-    throw new Error("Le contenu du QR code est illisible ou corrompu.");
+    throw new Error("Le contenu partagé est illisible ou corrompu.");
   }
+}
+
+// Accepte un lien de partage (QR actuel) ou l'ancien format "RVE1:<contenu>".
+export function decodeScenarioPayload(text) {
+  if (typeof text !== "string") throw new Error("Ce QR code ne correspond pas à un scénario partagé.");
+  const value = text.trim();
+  if (value.startsWith(QR_PREFIX)) return decodeScenarioContent(value.slice(QR_PREFIX.length));
+  const match = value.match(/#\/import\?(.*)$/);
+  if (match) return decodeScenarioContent(new URLSearchParams(match[1]).get("content"));
+  throw new Error("Ce QR code ne correspond pas à un scénario partagé.");
 }
