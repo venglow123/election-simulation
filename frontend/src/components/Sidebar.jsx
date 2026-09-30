@@ -3,6 +3,7 @@ import { NavLink, useMatch, useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { useSimulations } from "../context/SimulationsContext.jsx";
 import ImportScenarioModal from "./ImportScenarioModal.jsx";
+import SidebarSection from "./SidebarSection.jsx";
 import WorkspaceSelector from "./WorkspaceSelector.jsx";
 
 export default function Sidebar() {
@@ -54,41 +55,43 @@ export default function Sidebar() {
     <aside className="sidebar">
       <WorkspaceSelector selectedElectionId={electionId} />
 
-      <div className="sidebar-section-header">
-        <h2 className="sidebar-section-title">Scénarios</h2>
-        <div className="sidebar-section-actions">
-          <button
-            type="button"
-            className="sidebar-icon-button"
-            data-tooltip="Nouveau scénario"
-            aria-label="Nouveau scénario"
-            onClick={handleCreate}
-            disabled={!electionId}
-          >
-            +
-          </button>
-          <button
-            type="button"
-            className="sidebar-icon-button"
-            data-tooltip="Importer un scénario"
-            aria-label="Importer un scénario"
-            onClick={() => setIsImportOpen(true)}
-            disabled={!electionId}
-          >
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M12 3v12" />
-              <path d="m7 10 5 5 5-5" />
-              <path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      <nav className="sim-tabs">
-        {simulations.length === 0 && <p className="sim-tabs-empty">Aucun scénario pour l'instant.</p>}
-        {simulations.map((sim) => (
+      <SidebarSection
+        title="Scénarios"
+        items={simulations}
+        getItemKey={(sim) => sim.id}
+        emptyMessage="Aucun scénario pour l'instant."
+        listClassName="sim-tabs"
+        emptyClassName="sim-tabs-empty"
+        actions={
+          <>
+            <button
+              type="button"
+              className="sidebar-icon-button"
+              data-tooltip="Nouveau scénario"
+              aria-label="Nouveau scénario"
+              onClick={handleCreate}
+              disabled={!electionId}
+            >
+              +
+            </button>
+            <button
+              type="button"
+              className="sidebar-icon-button"
+              data-tooltip="Importer un scénario"
+              aria-label="Importer un scénario"
+              onClick={() => setIsImportOpen(true)}
+              disabled={!electionId}
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 3v12" />
+                <path d="m7 10 5 5 5-5" />
+                <path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" />
+              </svg>
+            </button>
+          </>
+        }
+        renderItem={(sim) => (
           <div
-            key={sim.id}
             className={`sim-tab ${String(sim.id) === simulationId ? "active" : ""} ${
               draggedId === sim.id ? "dragging" : ""
             }`}
@@ -112,8 +115,8 @@ export default function Sidebar() {
               </button>
             </div>
           </div>
-        ))}
-      </nav>
+        )}
+      />
       {isImportOpen && (
         <ImportScenarioModal
           electionId={electionId}
