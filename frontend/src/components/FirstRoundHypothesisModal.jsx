@@ -16,6 +16,7 @@ export default function FirstRoundHypothesisModal({ electionId, selectedHypothes
   const [tags, setTags] = useState([]);
   const [selectedTagIds, setSelectedTagIds] = useState([]);
   const [activeHypothesis, setActiveHypothesis] = useState(null);
+  const [pickedId, setPickedId] = useState(selectedHypothesisId ?? null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -60,6 +61,7 @@ export default function FirstRoundHypothesisModal({ electionId, selectedHypothes
 
   async function viewHypothesis(hypothesisId) {
     setError("");
+    setPickedId(hypothesisId);
     try {
       setActiveHypothesis(await api.getElectionHypothesis(electionId, hypothesisId));
     } catch (loadError) {
@@ -78,14 +80,18 @@ export default function FirstRoundHypothesisModal({ electionId, selectedHypothes
     [tags, filteredHypotheses, selectedTagIds]
   );
   const selectedTags = selectedTagIds.map((id) => tagsById.get(id)).filter(Boolean);
+  // A picked hypothesis hidden by the tag filter must not be applied blindly.
+  const applyId = activeHypothesis
+    ? activeHypothesis.id
+    : filteredHypotheses.some((hypothesis) => hypothesis.id === pickedId) ? pickedId : null;
 
   function renderHypothesisTags(hypothesis) {
     const hypothesisTags = hypothesis.tag_ids.map((id) => tagsById.get(id)).filter(Boolean);
     if (!hypothesisTags.length) return null;
     return (
-      <div className="tag-list">
+      <span className="tag-list">
         {hypothesisTags.map((tag) => <TagChip key={tag.id} tag={tag} />)}
-      </div>
+      </span>
     );
   }
 
@@ -119,6 +125,25 @@ export default function FirstRoundHypothesisModal({ electionId, selectedHypothes
             ×
           </button>
         </header>
+        {!loading && !activeHypothesis && (selectedTags.length > 0 || refinementTags.length > 0) && (
+          <div className="hypothesis-tag-filter" role="group" aria-label="Filtrer par tags">
+            {selectedTags.map((tag) => (
+              <TagChip
+                key={tag.id}
+                tag={tag}
+                onRemove={() => setSelectedTagIds((current) => current.filter((id) => id !== tag.id))}
+              />
+            ))}
+            {refinementTags.map((tag) => (
+              <TagChip
+                key={tag.id}
+                tag={tag}
+                title={`Filtrer sur ${tag.name}`}
+                onClick={() => setSelectedTagIds((current) => [...current, tag.id])}
+              />
+            ))}
+          </div>
+        )}
         <div className="detail-dialog-body hypothesis-picker-body">
           {error && <p className="form-error" role="alert">{error}</p>}
           {loading ? (
@@ -147,86 +172,62 @@ export default function FirstRoundHypothesisModal({ electionId, selectedHypothes
               ) : (
                 <p className="hint">Cette hypothèse ne contient aucun candidat.</p>
               )}
-              <div className="hypothesis-picker-actions">
-                <button type="button" onClick={() => chooseHypothesis(activeHypothesis.id)} disabled={busy}>
-                  {busy ? "Application…" : selectedHypothesisId === activeHypothesis.id ? "Utiliser cette hypothèse" : "Sélectionner cette hypothèse"}
-                </button>
-              </div>
             </>
+          ) : hypotheses.length === 0 ? (
+            <p className="hint">Aucune hypothèse enregistrée. Vous pouvez continuer en Custom.</p>
           ) : (
-            <>
-              <button
-                type="button"
-                className={`hypothesis-picker-custom ${selectedHypothesisId == null ? "is-selected" : ""}`}
-                onClick={() => chooseHypothesis(null)}
-                disabled={busy}
-              >
-                <span>
-                  <strong>Custom</strong>
-                  <small>Conserver et modifier les valeurs actuelles du scénario.</small>
-                </span>
-                {selectedHypothesisId == null && <span className="hypothesis-picker-current">Sélectionnée</span>}
-              </button>
-              {hypotheses.length === 0 ? (
-                <p className="hint">Aucune hypothèse enregistrée. Vous pouvez continuer avec Custom.</p>
-              ) : (
-                <>
-                {(selectedTags.length > 0 || refinementTags.length > 0) && (
-                  <div className="hypothesis-tag-filter" aria-label="Filtrer par tags">
-                    {selectedTags.map((tag) => (
-                      <TagChip
-                        key={tag.id}
-                        tag={tag}
-                        onRemove={() => setSelectedTagIds((current) => current.filter((id) => id !== tag.id))}
+            <ul className="hypothesis-picker-list" role="radiogroup" aria-label="Hypothèses">
+              {filteredHypotheses.map((hypothesis) => {
+                const topCandidates = getLeaders(hypothesis);
+                const checked = pickedId === hypothesis.id;
+                return (
+                  <li key={hypothesis.id} className={`hypothesis-picker-row ${checked ? "is-checked" : ""}`}>
+                    <label className="hypothesis-picker-option">
+                      <input
+                        type="radio"
+                        name="hypothesis-picker"
+                        checked={checked}
+                        onChange={() => setPickedId(hypothesis.id)}
                       />
-                    ))}
-                    {refinementTags.length > 0 && (
-                      <span className="hypothesis-tag-filter-label">
-                        {selectedTags.length ? "Affiner :" : "Filtrer :"}
+                      <span className="hypothesis-picker-main">
+                        <span className="hypothesis-picker-name">{hypothesis.name}</span>
+                        {selectedHypothesisId === hypothesis.id && <span className="hypothesis-picker-current">Actuelle</span>}
+                        {renderHypothesisTags(hypothesis)}
                       </span>
-                    )}
-                    {refinementTags.map((tag) => (
-                      <TagChip
-                        key={tag.id}
-                        tag={tag}
-                        title={`Filtrer sur ${tag.name}`}
-                        onClick={() => setSelectedTagIds((current) => [...current, tag.id])}
-                      />
-                    ))}
-                  </div>
-                )}
-                <ul className="hypothesis-picker-list">
-                  {filteredHypotheses.map((hypothesis) => {
-                    const topCandidates = getLeaders(hypothesis);
-                    return (
-                      <li key={hypothesis.id}>
-                        <div className="hypothesis-picker-item-info">
-                          <strong>{hypothesis.name}</strong>
-                          <span>
-                            {topCandidates.length === 2
-                              ? `${topCandidates[0].name} (${topCandidates[0].pct_r1}%) · ${topCandidates[1].name} (${topCandidates[1].pct_r1}%)`
-                              : "Moins de deux candidats"}
-                          </span>
-                          {renderHypothesisTags(hypothesis)}
-                        </div>
-                        <div className="hypothesis-picker-item-actions">
-                          {selectedHypothesisId === hypothesis.id && <span className="hypothesis-picker-current">Sélectionnée</span>}
-                          <button type="button" className="btn-ghost" onClick={() => viewHypothesis(hypothesis.id)}>
-                            Consulter
-                          </button>
-                          <button type="button" onClick={() => chooseHypothesis(hypothesis.id)} disabled={busy}>
-                            Sélectionner
-                          </button>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-                </>
-              )}
-            </>
+                      <span className="hypothesis-picker-summary">
+                        {topCandidates.length === 2
+                          ? `${topCandidates[0].name} ${topCandidates[0].pct_r1}% · ${topCandidates[1].name} ${topCandidates[1].pct_r1}%`
+                          : "—"}
+                      </span>
+                    </label>
+                    <button
+                      type="button"
+                      className="btn-ghost hypothesis-picker-view"
+                      onClick={() => viewHypothesis(hypothesis.id)}
+                      aria-label={`Consulter ${hypothesis.name}`}
+                    >
+                      Consulter
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </div>
+        <footer className="hypothesis-picker-footer">
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={() => chooseHypothesis(null)}
+            disabled={busy}
+            title="Conserver et modifier les valeurs actuelles du scénario"
+          >
+            {selectedHypothesisId == null ? "Rester en Custom" : "Passer en Custom"}
+          </button>
+          <button type="button" onClick={() => chooseHypothesis(applyId)} disabled={busy || applyId == null || applyId === selectedHypothesisId}>
+            {busy ? "Application…" : "Appliquer l'hypothèse"}
+          </button>
+        </footer>
       </section>
     </div>,
     document.body

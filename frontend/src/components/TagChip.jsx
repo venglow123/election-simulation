@@ -5,7 +5,14 @@ export default function TagChip({ tag, onRemove, onClick, title }) {
 
   if (onClick) {
     return (
-      <button type="button" className="tag-chip tag-chip-button" style={style} onClick={onClick} title={title}>
+      <button
+        type="button"
+        className="tag-chip tag-chip-button"
+        style={{ borderColor: tag.color }}
+        onClick={onClick}
+        title={title}
+      >
+        <span className="tag-swatch" style={{ backgroundColor: tag.color }} />
         {tag.name}
       </button>
     );

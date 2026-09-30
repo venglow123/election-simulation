@@ -145,6 +145,14 @@ button.danger:hover {
   background: #f3f4f6;
 }
 
+button:disabled,
+button:disabled:hover {
+  background: #e5e7eb;
+  color: #9ca3af;
+  border-color: #e5e7eb;
+  cursor: not-allowed;
+}
+
 .detail-overlay {
   position: fixed;
   inset: 0;
