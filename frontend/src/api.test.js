@@ -94,3 +94,101 @@ test("les scénarios et le référentiel de candidats restent isolés par élect
   assert.equal((await api.listElectionCandidates(firstElection.id))[0].usage_count, 1);
   assert.ok(candidateId > 0);
 });
+
+test("les hypothèses du premier tour sont isolées, modifiables et dupliquées indépendamment", async () => {
+  resetStorage();
+  const firstElection = await api.createElection("Municipales");
+  const secondElection = await api.createElection("Présidentielle");
+  const hypothesis = await api.createElectionHypothesis(firstElection.id);
+
+  await api.updateElectionHypothesis(firstElection.id, hypothesis.id, {
+    name: "Sondage de juin",
+    description: "Hypothèse de référence",
+  });
+  const withFirstCandidate = await api.addHypothesisCandidate(firstElection.id, hypothesis.id, {
+    name: "Alice",
+    pct_r1: 52,
+  });
+  const firstCandidate = withFirstCandidate.candidates[0];
+  const withSecondCandidate = await api.addHypothesisCandidate(firstElection.id, hypothesis.id, {
+    name: "Benoît",
+    pct_r1: 48,
+  });
+  const copy = await api.duplicateElectionHypothesis(firstElection.id, hypothesis.id);
+
+  await api.updateHypothesisCandidate(firstElection.id, hypothesis.id, firstCandidate.id, { pct_r1: 60 });
+  const updated = await api.getElectionHypothesis(firstElection.id, hypothesis.id);
+
+  assert.equal(updated.name, "Sondage de juin");
+  assert.equal(updated.description, "Hypothèse de référence");
+  assert.equal(updated.candidates[0].pct_r1, 60);
+  assert.equal(withSecondCandidate.candidates.length, 2);
+  assert.notEqual(copy.id, hypothesis.id);
+  assert.notEqual(copy.candidates[0].id, firstCandidate.id);
+  assert.equal(copy.candidates[0].pct_r1, 52);
+  assert.equal((await api.listElectionHypotheses(secondElection.id)).length, 0);
+
+  const [aliceReference] = await api.listElectionCandidates(firstElection.id);
+  await api.updateElectionCandidate(firstElection.id, aliceReference.id, { name: "Alice Martin" });
+  assert.equal((await api.getElectionHypothesis(firstElection.id, hypothesis.id)).candidates[0].name, "Alice Martin");
+  const [renamedReference] = await api.listElectionCandidates(firstElection.id);
+  await api.deleteElectionCandidate(firstElection.id, renamedReference.id);
+  assert.equal((await api.getElectionHypothesis(firstElection.id, hypothesis.id)).candidates[0].name, "Alice Martin");
+
+  await api.deleteHypothesisCandidate(firstElection.id, hypothesis.id, firstCandidate.id);
+  assert.equal((await api.getElectionHypothesis(firstElection.id, hypothesis.id)).candidates.length, 1);
+  await api.deleteElectionHypothesis(firstElection.id, hypothesis.id);
+  assert.equal((await api.listElectionHypotheses(firstElection.id)).length, 1);
+});
+
+test("les changements d'une hypothèse alimentent ses scénarios liés sans écraser les personnalisations locales", async () => {
+  resetStorage();
+  const election = await api.createElection("Municipales");
+  const hypothesis = await api.createElectionHypothesis(election.id);
+  const { candidates } = await api.addHypothesisCandidate(election.id, hypothesis.id, {
+    name: "Alice",
+    pct_r1: 55,
+  });
+  const second = await api.addHypothesisCandidate(election.id, hypothesis.id, {
+    name: "Benoît",
+    pct_r1: 45,
+  });
+  const simulation = await api.createSimulation(election.id, "Scénario lié");
+
+  let selected = await api.setSimulationFirstRoundHypothesis(election.id, simulation.id, hypothesis.id);
+  const [alice] = selected.candidates;
+  assert.equal(selected.r1_hypothesis_id, hypothesis.id);
+  assert.equal(alice.name, "Alice");
+  assert.equal(alice.pct_r1, 55);
+
+  await api.updateCandidate(simulation.id, alice.id, { pct_r1: 60 });
+  await api.updateHypothesisCandidate(election.id, hypothesis.id, candidates[0].id, { pct_r1: 58 });
+  await api.updateHypothesisCandidate(election.id, hypothesis.id, second.candidates[1].id, { pct_r1: 42 });
+  let updated = await api.getSimulation(election.id, simulation.id);
+  assert.equal(updated.candidates[0].pct_r1, 60);
+  assert.equal(updated.candidates[1].pct_r1, 42);
+
+  const withThirdCandidate = await api.addHypothesisCandidate(election.id, hypothesis.id, {
+    name: "Chloé",
+    pct_r1: 3,
+  });
+  let linkedSimulation = await api.getSimulation(election.id, simulation.id);
+  assert.equal(linkedSimulation.candidates.length, 3);
+  const localChloe = linkedSimulation.candidates[2];
+  await api.deleteCandidate(simulation.id, localChloe.id);
+  await api.updateHypothesisCandidate(election.id, hypothesis.id, withThirdCandidate.candidates[2].id, { pct_r1: 5 });
+  linkedSimulation = await api.getSimulation(election.id, simulation.id);
+  assert.equal(linkedSimulation.candidates.length, 2);
+
+  updated = await api.resetSimulationFirstRoundHypothesis(election.id, simulation.id);
+  assert.deepEqual(updated.candidates.map((candidate) => candidate.pct_r1), [58, 42, 5]);
+
+  const custom = await api.setSimulationFirstRoundHypothesis(election.id, simulation.id, null);
+  assert.equal(custom.r1_hypothesis_id, null);
+  assert.deepEqual(custom.candidates.map((candidate) => candidate.pct_r1), [58, 42, 5]);
+
+  const saved = await api.saveSimulationAsFirstRoundHypothesis(election.id, simulation.id, custom.candidates);
+  assert.equal(saved.hypothesis.candidates.length, 3);
+  assert.equal(saved.simulation.r1_hypothesis_id, saved.hypothesis.id);
+  assert.deepEqual(saved.hypothesis.candidates.map((candidate) => candidate.pct_r1), [58, 42, 5]);
+});

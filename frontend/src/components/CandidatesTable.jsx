@@ -2,7 +2,17 @@ import { useState } from "react";
 import CandidateAutocomplete from "./CandidateAutocomplete.jsx";
 import EditableTable from "./EditableTable.jsx";
 
-export default function CandidatesTable({ simulation, candidateOptions = [], onFieldChange, onCreate, onDelete }) {
+export default function CandidatesTable({
+  simulation,
+  candidateOptions = [],
+  onFieldChange,
+  onCreate,
+  onDelete,
+  title = "Résultats du 1er tour",
+  showVotes = true,
+  headerActions,
+  baselineCandidates,
+}) {
   const [draft, setDraft] = useState({ name: "", pct_r1: "" });
 
   function submitDraft() {
@@ -15,55 +25,77 @@ export default function CandidatesTable({ simulation, candidateOptions = [], onF
     (sum, c) => sum + (parseFloat(String(c.pct_r1).replace(",", ".")) || 0),
     0
   );
+  const baselineById = new Map((baselineCandidates || []).map((candidate) => [candidate.id, candidate]));
+
+  function getBaseline(candidate) {
+    if (simulation.r1_hypothesis_id == null || !Array.isArray(baselineCandidates)) return null;
+    return candidate.hypothesis_candidate_id == null
+      ? null
+      : baselineById.get(candidate.hypothesis_candidate_id) || null;
+  }
+
+  function isDifferent(candidate, field) {
+    if (simulation.r1_hypothesis_id == null || !Array.isArray(baselineCandidates)) return false;
+    const baseline = getBaseline(candidate);
+    return !baseline || candidate[field] !== baseline[field];
+  }
+
+  const columns = [
+    {
+      key: "candidate",
+      label: "Candidat",
+      render: (candidate) => (
+        <CandidateAutocomplete
+          value={candidate.name}
+          options={candidateOptions}
+          ariaLabel="Nom du candidat"
+          className={isDifferent(candidate, "name") ? "assumption-diff" : ""}
+          title={isDifferent(candidate, "name") ? `Valeur de l'hypothèse : ${getBaseline(candidate)?.name || "candidat personnalisé"}` : undefined}
+          onChange={(name) => onFieldChange(candidate.id, "name", name)}
+        />
+      ),
+    },
+    {
+      key: "pct_r1",
+      label: "% 1er tour",
+      render: (candidate) => (
+        <input
+          type="text"
+          inputMode="decimal"
+          className={`grid-input ${isDifferent(candidate, "pct_r1") ? "assumption-diff" : ""}`}
+          title={isDifferent(candidate, "pct_r1") ? `Valeur de l'hypothèse : ${getBaseline(candidate)?.pct_r1 ?? "candidat personnalisé"}%` : undefined}
+          value={candidate.pct_r1}
+          onChange={(event) => onFieldChange(candidate.id, "pct_r1", event.target.value)}
+        />
+      ),
+    },
+    ...(showVotes ? [{ key: "votes", label: "Voix", cellClassName: "votes-cell", render: (candidate) => candidate.votes_r1 }] : []),
+    {
+      key: "actions",
+      label: "",
+      render: (candidate) => (
+        <button
+          type="button"
+          className="danger row-delete"
+          title="Supprimer"
+          onClick={() => {
+            if (confirm(`Supprimer « ${candidate.name} » ?`)) onDelete(candidate.id);
+          }}
+        >
+          ✕
+        </button>
+      ),
+    },
+  ];
 
   return (
     <div className="panel">
-      <h2>Résultats du 1er tour</h2>
+      <div className="panel-heading-row">
+        <h2>{title}</h2>
+        {headerActions && <div className="candidate-table-actions">{headerActions}</div>}
+      </div>
       <EditableTable
-        columns={[
-          {
-            key: "candidate",
-            label: "Candidat",
-            render: (candidate) => (
-                <CandidateAutocomplete
-                  value={candidate.name}
-                  options={candidateOptions}
-                  ariaLabel="Nom du candidat"
-                  onChange={(name) => onFieldChange(candidate.id, "name", name)}
-                />
-            ),
-          },
-          {
-            key: "pct_r1",
-            label: "% 1er tour",
-            render: (candidate) => (
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  className="grid-input"
-                  value={candidate.pct_r1}
-                  onChange={(event) => onFieldChange(candidate.id, "pct_r1", event.target.value)}
-                />
-            ),
-          },
-          { key: "votes", label: "Voix", cellClassName: "votes-cell", render: (candidate) => candidate.votes_r1 },
-          {
-            key: "actions",
-            label: "",
-            render: (candidate) => (
-                <button
-                  type="button"
-                  className="danger row-delete"
-                  title="Supprimer"
-                  onClick={() => {
-                    if (confirm(`Supprimer « ${candidate.name} » ?`)) onDelete(candidate.id);
-                  }}
-                >
-                  ✕
-                </button>
-            ),
-          },
-        ]}
+        columns={columns}
         rows={simulation.candidates}
         getRowKey={(candidate) => candidate.id}
         renderDraftCell={(column) => {
@@ -96,7 +128,7 @@ export default function CandidatesTable({ simulation, candidateOptions = [], onF
             <td className={`total-cell ${Math.abs(totalPct - 100) <= 0.01 ? "total-ok" : "total-warn"}`}>
               {totalPct.toFixed(2)}%
             </td>
-            <td colSpan={2}></td>
+            <td colSpan={showVotes ? 2 : 1}></td>
           </tr>
         )}
       />

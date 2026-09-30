@@ -9,7 +9,7 @@ function normalize(value) {
     .toLowerCase();
 }
 
-export default function CandidateAutocomplete({ value, options, onChange, onEnterCommit, placeholder, ariaLabel }) {
+export default function CandidateAutocomplete({ value, options, onChange, onEnterCommit, placeholder, ariaLabel, className = "", title }) {
   const inputRef = useRef(null);
   const [isOpen, setIsOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
@@ -60,7 +60,7 @@ export default function CandidateAutocomplete({ value, options, onChange, onEnte
   }
 
   return (
-    <div className="autocomplete">
+    <div className={`autocomplete ${className}`} title={title}>
       <input
         ref={inputRef}
         type="text"

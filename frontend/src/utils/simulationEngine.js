@@ -158,11 +158,15 @@ export function serializeSimulation(simulation) {
     votants_r1: votantsR1(simulation),
     abstention_to_a: simulation.abstention_to_a,
     abstention_to_b: simulation.abstention_to_b,
+    r1_hypothesis_id: simulation.r1_hypothesis_id ?? null,
     abstention_stay_pct: round2(100 - simulation.abstention_to_a - simulation.abstention_to_b),
     candidates: simulation.candidates.map((c) => ({
       id: c.id,
       name: c.name,
       pct_r1: c.pct_r1,
+      hypothesis_candidate_id: c.hypothesis_candidate_id ?? null,
+      r1_name_override: Boolean(c.r1_name_override),
+      r1_pct_override: Boolean(c.r1_pct_override),
       votes_r1: candidateVotesR1(simulation, c),
       transfer: {
         pct_to_a: c.transfer.pct_to_a,

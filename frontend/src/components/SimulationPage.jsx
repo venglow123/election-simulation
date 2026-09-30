@@ -11,6 +11,7 @@ import ResultsPanel from "./ResultsPanel.jsx";
 import SankeyDiagram from "./SankeyDiagram.jsx";
 import SankeyDetailModal from "./SankeyDetailModal.jsx";
 import ShareScenarioModal from "./ShareScenarioModal.jsx";
+import FirstRoundHypothesisModal from "./FirstRoundHypothesisModal.jsx";
 import WarningsPanel from "./WarningsPanel.jsx";
 
 const SAVE_DELAY = 400;
@@ -27,15 +28,24 @@ export default function SimulationPage() {
   const [notFound, setNotFound] = useState(false);
   const [isSankeyDetailOpen, setIsSankeyDetailOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isFirstRoundHypothesisOpen, setIsFirstRoundHypothesisOpen] = useState(false);
+  const [firstRoundHypothesis, setFirstRoundHypothesis] = useState(null);
+  const [firstRoundError, setFirstRoundError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
     setSim(null);
+    setFirstRoundHypothesis(null);
     setNotFound(false);
     Promise.all([api.getSimulation(electionId, id), api.listElectionCandidates(electionId)])
-      .then(([data, options]) => {
+      .then(async ([data, options]) => {
+        let hypothesis = null;
+        if (data.r1_hypothesis_id != null) {
+          hypothesis = await api.getElectionHypothesis(electionId, data.r1_hypothesis_id);
+        }
         if (!cancelled) setSim(data);
         if (!cancelled) setCandidateOptions(options);
+        if (!cancelled) setFirstRoundHypothesis(hypothesis);
       })
       .catch(() => {
         if (!cancelled) setNotFound(true);
@@ -45,7 +55,29 @@ export default function SimulationPage() {
     };
   }, [electionId, id]);
 
+  useEffect(() => {
+    async function refreshFromStorage(event) {
+      if (event.key !== "election-simulation:v2") return;
+      try {
+        const [data, options] = await Promise.all([
+          api.getSimulation(electionId, id),
+          api.listElectionCandidates(electionId),
+        ]);
+        const hypothesis = data.r1_hypothesis_id == null
+          ? null
+          : await api.getElectionHypothesis(electionId, data.r1_hypothesis_id);
+        setSim(data);
+        setCandidateOptions(options);
+        setFirstRoundHypothesis(hypothesis);
+      } catch {
+      }
+    }
+    window.addEventListener("storage", refreshFromStorage);
+    return () => window.removeEventListener("storage", refreshFromStorage);
+  }, [electionId, id]);
+
   const applyState = useCallback((data) => setSim(data), []);
+  const closeFirstRoundHypothesisModal = useCallback(() => setIsFirstRoundHypothesisOpen(false), []);
 
   const saveMetaField = useCallback(
     (field, value) => {
@@ -144,6 +176,47 @@ export default function SimulationPage() {
     refreshSidebar();
   }
 
+  async function handleSelectFirstRoundHypothesis(hypothesisId) {
+    const updated = await api.setSimulationFirstRoundHypothesis(electionId, id, hypothesisId);
+    setSim(updated);
+    setFirstRoundError("");
+    setFirstRoundHypothesis(hypothesisId == null
+      ? null
+      : await api.getElectionHypothesis(electionId, hypothesisId));
+    setCandidateOptions(await api.listElectionCandidates(electionId));
+    setIsFirstRoundHypothesisOpen(false);
+  }
+
+  async function handleResetFirstRoundHypothesis() {
+    try {
+      const updated = await api.resetSimulationFirstRoundHypothesis(electionId, id);
+      setSim(updated);
+      if (updated.r1_hypothesis_id != null) {
+        setFirstRoundHypothesis(await api.getElectionHypothesis(electionId, updated.r1_hypothesis_id));
+      }
+      setFirstRoundError("");
+    } catch (error) {
+      setFirstRoundError(error.message);
+    }
+  }
+
+  async function handleSaveCurrentAsHypothesis() {
+    try {
+      const { hypothesis } = await api.saveSimulationAsFirstRoundHypothesis(electionId, id, sim.candidates);
+      navigate(`/elections/${electionId}/hypotheses/${hypothesis.id}`, {
+        state: {
+          focusTitle: true,
+          returnTo: {
+            label: sim.name || "Scénario",
+            to: `/elections/${electionId}/simulations/${id}`,
+          },
+        },
+      });
+    } catch (error) {
+      setFirstRoundError(error.message);
+    }
+  }
+
   if (notFound) return <p className="empty">Scénario introuvable.</p>;
   if (!sim) return null;
 
@@ -164,10 +237,28 @@ export default function SimulationPage() {
           <CandidatesTable
             simulation={sim}
             candidateOptions={candidateOptions}
+            baselineCandidates={firstRoundHypothesis?.candidates}
             onFieldChange={saveCandidateField}
             onCreate={handleCreateCandidate}
             onDelete={handleDeleteCandidate}
+            headerActions={(
+              <>
+                <button type="button" className="btn-ghost" onClick={() => setIsFirstRoundHypothesisOpen(true)}>
+                  {firstRoundHypothesis ? `Hypothèse : ${firstRoundHypothesis.name}` : "Hypothèse : Custom"}
+                </button>
+                {firstRoundHypothesis ? (
+                  <button type="button" className="btn-ghost" onClick={handleResetFirstRoundHypothesis}>
+                    Réinitialiser
+                  </button>
+                ) : (
+                  <button type="button" className="btn-ghost" onClick={handleSaveCurrentAsHypothesis}>
+                    Enregistrer comme hypothèse
+                  </button>
+                )}
+              </>
+            )}
           />
+          {firstRoundError && <p className="form-error">{firstRoundError}</p>}
           <TransfersTable
             simulation={sim}
             onFieldChange={saveTransferField}
@@ -194,6 +285,14 @@ export default function SimulationPage() {
       </div>
       {isSankeyDetailOpen && <SankeyDetailModal data={sim.sankey} onClose={() => setIsSankeyDetailOpen(false)} />}
       {isShareOpen && <ShareScenarioModal simulation={sim} onClose={() => setIsShareOpen(false)} />}
+      {isFirstRoundHypothesisOpen && (
+        <FirstRoundHypothesisModal
+          electionId={electionId}
+          selectedHypothesisId={sim.r1_hypothesis_id}
+          onSelect={handleSelectFirstRoundHypothesis}
+          onClose={closeFirstRoundHypothesisModal}
+        />
+      )}
     </>
   );
 }

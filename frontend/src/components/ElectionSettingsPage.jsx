@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { NavLink, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api.js";
 import { useSimulations } from "../context/SimulationsContext.jsx";
+import Breadcrumbs from "./Breadcrumbs.jsx";
 import EditableTable from "./EditableTable.jsx";
 
 export default function ElectionSettingsPage() {
@@ -12,8 +13,10 @@ export default function ElectionSettingsPage() {
   const [name, setName] = useState("");
   const [confirmingDeletion, setConfirmingDeletion] = useState(false);
   const [candidates, setCandidates] = useState([]);
+  const [hypotheses, setHypotheses] = useState([]);
   const [draft, setDraft] = useState({ name: "", party: "" });
   const [candidateError, setCandidateError] = useState("");
+  const [hypothesisError, setHypothesisError] = useState("");
 
   useEffect(() => setName(election?.name || ""), [election]);
 
@@ -23,6 +26,16 @@ export default function ElectionSettingsPage() {
       if (!cancelled) setCandidates(data);
     }).catch(() => {
       if (!cancelled) setCandidates([]);
+    });
+    return () => { cancelled = true; };
+  }, [electionId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.listElectionHypotheses(electionId).then((data) => {
+      if (!cancelled) setHypotheses(data);
+    }).catch((error) => {
+      if (!cancelled) setHypothesisError(error.message);
     });
     return () => { cancelled = true; };
   }, [electionId]);
@@ -75,10 +88,31 @@ export default function ElectionSettingsPage() {
 
   async function handleDeleteCandidate(candidate) {
     const message = candidate.usage_count
-      ? `Retirer « ${candidate.name} » du référentiel ? Il est utilisé dans ${candidate.usage_count} scénario${candidate.usage_count > 1 ? "s" : ""}, dont les données seront conservées.`
+      ? `Retirer « ${candidate.name} » du référentiel ? Il est utilisé dans ${candidate.usage_count} scénario${candidate.usage_count > 1 ? "s" : ""} ou hypothèse, dont les données seront conservées.`
       : `Supprimer « ${candidate.name} » ?`;
     if (!confirm(message)) return;
     setCandidates(await api.deleteElectionCandidate(election.id, candidate.id));
+  }
+
+  async function handleCreateHypothesis() {
+    setHypothesisError("");
+    try {
+      const hypothesis = await api.createElectionHypothesis(election.id);
+      navigate(`/elections/${election.id}/hypotheses/${hypothesis.id}`, { state: { focusTitle: true } });
+    } catch (error) {
+      setHypothesisError(error.message);
+    }
+  }
+
+  async function handleDeleteHypothesis(hypothesis) {
+    if (!confirm(`Supprimer l'hypothèse « ${hypothesis.name} » ?`)) return;
+    setHypothesisError("");
+    try {
+      await api.deleteElectionHypothesis(election.id, hypothesis.id);
+      setHypotheses((current) => current.filter((item) => item.id !== hypothesis.id));
+    } catch (error) {
+      setHypothesisError(error.message);
+    }
   }
 
   async function handleDelete() {
@@ -90,8 +124,13 @@ export default function ElectionSettingsPage() {
   return (
     <div className="election-settings-page">
       <header className="election-settings-header">
-        <p className="detail-eyebrow">Configuration de l'élection</p>
-        <h1>{election.name}</h1>
+        <Breadcrumbs
+          items={[
+            { label: election.name, to: `/elections/${election.id}` },
+            { label: "Paramètres" },
+          ]}
+        />
+        <h1>Paramètres de l'élection</h1>
       </header>
       <section className="panel election-settings-panel">
         <h2>Nom de l'élection</h2>
@@ -125,7 +164,7 @@ export default function ElectionSettingsPage() {
                     onBlur={() => handleCandidateBlur(candidate, "party")} />
               ),
             },
-            { key: "usage", label: "Scénarios", render: (candidate) => candidate.usage_count },
+            { key: "usage", label: "Usages", render: (candidate) => candidate.usage_count },
             {
               key: "actions",
               label: "",
@@ -151,6 +190,52 @@ export default function ElectionSettingsPage() {
           onEnterLastRow={addCandidate}
         />
         {candidateError && <p className="form-error">{candidateError}</p>}
+      </section>
+      <section className="panel election-settings-panel">
+        <div className="panel-heading-row">
+          <h2>Hypothèses premier tour</h2>
+          <button type="button" className="btn-ghost" onClick={handleCreateHypothesis}>
+            + Nouvelle hypothèse
+          </button>
+        </div>
+        {hypothesisError && <p className="form-error">{hypothesisError}</p>}
+        {hypotheses.length === 0 ? (
+          <p className="hint">Aucune hypothèse enregistrée pour cette élection.</p>
+        ) : (
+          <ul className="hypothesis-list">
+            {hypotheses.map((hypothesis) => {
+              const finalists = [...hypothesis.candidates]
+                .sort((a, b) => Number(b.pct_r1) - Number(a.pct_r1))
+                .slice(0, 2);
+              return (
+                <li key={hypothesis.id} className="hypothesis-list-item">
+                  <div className="hypothesis-list-content">
+                    <NavLink
+                      className="hypothesis-list-link"
+                      to={`/elections/${election.id}/hypotheses/${hypothesis.id}`}
+                    >
+                      {hypothesis.name}
+                    </NavLink>
+                    <p className="hypothesis-finalists">
+                      {finalists.length === 2
+                        ? `En tête : ${finalists[0].name} (${finalists[0].pct_r1}%) · ${finalists[1].name} (${finalists[1].pct_r1}%)`
+                        : "Ajoutez au moins deux candidats pour voir les deux premiers."}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="danger row-delete hypothesis-delete"
+                    title={`Supprimer ${hypothesis.name}`}
+                    aria-label={`Supprimer l'hypothèse ${hypothesis.name}`}
+                    onClick={() => handleDeleteHypothesis(hypothesis)}
+                  >
+                    ✕
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </section>
       <section className="panel election-danger-zone">
         <div>

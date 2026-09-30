@@ -12,6 +12,8 @@ function emptyState() {
     version: 2,
     nextElectionId: 1,
     nextElectionCandidateId: 1,
+    nextHypothesisId: 1,
+    nextHypothesisCandidateId: 1,
     nextSimulationId: 1,
     nextCandidateId: 1,
     elections: [],
@@ -39,13 +41,39 @@ function normalizeState(raw) {
         name: String(candidate.name || ""),
         party: String(candidate.party || ""),
       })) : [],
+      hypotheses: Array.isArray(election.hypotheses) ? election.hypotheses.map((hypothesis, hypothesisIndex) => ({
+        ...hypothesis,
+        id: Number(hypothesis.id) || hypothesisIndex + 1,
+        name: String(hypothesis.name || "Nouvelle hypothèse"),
+        description: String(hypothesis.description || ""),
+        position: Number.isFinite(Number(hypothesis.position)) ? Number(hypothesis.position) : hypothesisIndex + 1,
+        candidates: Array.isArray(hypothesis.candidates) ? hypothesis.candidates.map((candidate, candidateIndex) => ({
+          ...candidate,
+          id: Number(candidate.id) || candidateIndex + 1,
+          name: String(candidate.name || ""),
+          pct_r1: Number.isFinite(Number(candidate.pct_r1)) ? Number(candidate.pct_r1) : 0,
+        })) : [],
+      })) : [],
     })) : [],
     simulations: raw.simulations.map((simulation, index) => ({
       ...simulation,
       id: Number(simulation.id) || index + 1,
       election_id: Number.isFinite(Number(simulation.election_id)) ? Number(simulation.election_id) : null,
       position: Number.isFinite(Number(simulation.position)) ? Number(simulation.position) : index + 1,
-      candidates: Array.isArray(simulation.candidates) ? simulation.candidates : [],
+      r1_hypothesis_id: simulation.r1_hypothesis_id != null && Number.isFinite(Number(simulation.r1_hypothesis_id))
+        ? Number(simulation.r1_hypothesis_id)
+        : null,
+      r1_excluded_hypothesis_candidate_ids: Array.isArray(simulation.r1_excluded_hypothesis_candidate_ids)
+        ? simulation.r1_excluded_hypothesis_candidate_ids.map(Number)
+        : [],
+      candidates: Array.isArray(simulation.candidates) ? simulation.candidates.map((candidate) => ({
+        ...candidate,
+        hypothesis_candidate_id: candidate.hypothesis_candidate_id != null && Number.isFinite(Number(candidate.hypothesis_candidate_id))
+          ? Number(candidate.hypothesis_candidate_id)
+          : null,
+        r1_name_override: Boolean(candidate.r1_name_override),
+        r1_pct_override: Boolean(candidate.r1_pct_override),
+      })) : [],
     })),
   };
   const unassigned = state.simulations.filter((simulation) =>
@@ -57,6 +85,7 @@ function normalizeState(raw) {
       name: "Élection existante",
       position: state.elections.length + 1,
       candidates: [],
+      hypotheses: [],
     };
     const candidateNames = new Set();
     for (const simulation of unassigned) {
@@ -74,6 +103,14 @@ function normalizeState(raw) {
   state.nextElectionCandidateId = Math.max(
     Number(state.nextElectionCandidateId) || 1,
     ...state.elections.flatMap((election) => [maxId(election.candidates) + 1])
+  );
+  state.nextHypothesisId = Math.max(
+    Number(state.nextHypothesisId) || 1,
+    ...state.elections.flatMap((election) => [maxId(election.hypotheses) + 1])
+  );
+  state.nextHypothesisCandidateId = Math.max(
+    Number(state.nextHypothesisCandidateId) || 1,
+    ...state.elections.flatMap((election) => election.hypotheses.map((hypothesis) => maxId(hypothesis.candidates) + 1))
   );
   state.nextSimulationId = Math.max(Number(state.nextSimulationId) || 1, maxId(state.simulations) + 1);
   state.nextCandidateId = Math.max(
@@ -138,6 +175,18 @@ function findCandidate(simulation, candidateId) {
   return candidate;
 }
 
+function findHypothesis(election, hypothesisId) {
+  const hypothesis = election.hypotheses.find((item) => item.id === Number(hypothesisId));
+  if (!hypothesis) throw new Error("Hypothèse introuvable.");
+  return hypothesis;
+}
+
+function findHypothesisCandidate(hypothesis, candidateId) {
+  const candidate = hypothesis.candidates.find((item) => item.id === Number(candidateId));
+  if (!candidate) throw new Error("Candidat introuvable.");
+  return candidate;
+}
+
 function nextPosition(state, electionId) {
   return state.simulations
     .filter((simulation) => simulation.election_id === electionId)
@@ -157,6 +206,7 @@ function ensureDefaultElection(state) {
       name: "Nouvelle élection",
       position: 1,
       candidates: [],
+      hypotheses: [],
     });
   }
   return state.elections[0];
@@ -189,6 +239,8 @@ function createSimulationRecord(state, electionId, fields) {
     abstention_r1: 0,
     abstention_to_a: 0,
     abstention_to_b: 0,
+    r1_hypothesis_id: null,
+    r1_excluded_hypothesis_candidate_ids: [],
     candidates: [],
     ...fields,
   };
@@ -196,11 +248,99 @@ function createSimulationRecord(state, electionId, fields) {
   return simulation;
 }
 
-function createCandidateRecord(state, simulation, { name, pct_r1 = 0, pct_to_a = 0, pct_to_b = 0 }) {
-  const candidate = { id: state.nextCandidateId++, name, pct_r1, transfer: { pct_to_a, pct_to_b } };
+function createCandidateRecord(state, simulation, {
+  name,
+  pct_r1 = 0,
+  pct_to_a = 0,
+  pct_to_b = 0,
+  hypothesis_candidate_id = null,
+  r1_name_override = false,
+  r1_pct_override = false,
+}) {
+  const candidate = {
+    id: state.nextCandidateId++,
+    name,
+    pct_r1,
+    transfer: { pct_to_a, pct_to_b },
+    hypothesis_candidate_id,
+    r1_name_override,
+    r1_pct_override,
+  };
   simulation.candidates.push(candidate);
   registerElectionCandidate(state, simulation.election_id, name);
   return candidate;
+}
+
+function createHypothesisRecord(state, election, fields = {}) {
+  const hypothesis = {
+    id: state.nextHypothesisId++,
+    name: "Nouvelle hypothèse",
+    description: "",
+    position: election.hypotheses.reduce((max, item) => Math.max(max, item.position), 0) + 1,
+    candidates: [],
+    ...fields,
+  };
+  election.hypotheses.push(hypothesis);
+  return hypothesis;
+}
+
+function createHypothesisCandidateRecord(state, electionId, hypothesis, { name, pct_r1 = 0 }) {
+  const candidate = { id: state.nextHypothesisCandidateId++, name, pct_r1 };
+  hypothesis.candidates.push(candidate);
+  registerElectionCandidate(state, electionId, name);
+  return candidate;
+}
+
+function applyHypothesisToSimulation(state, election, simulation, hypothesis) {
+  const existingByHypothesisCandidate = new Map(
+    simulation.candidates
+      .filter((candidate) => candidate.hypothesis_candidate_id != null)
+      .map((candidate) => [candidate.hypothesis_candidate_id, candidate])
+  );
+  const existingByName = new Map(simulation.candidates.map((candidate) => [candidate.name, candidate]));
+  simulation.candidates = hypothesis.candidates.map((source) => {
+    const existing = existingByHypothesisCandidate.get(source.id) || existingByName.get(source.name);
+    const candidate = existing || createCandidateRecord(state, simulation, {
+      name: source.name,
+      pct_r1: source.pct_r1,
+      hypothesis_candidate_id: source.id,
+    });
+    candidate.name = source.name;
+    candidate.pct_r1 = source.pct_r1;
+    candidate.hypothesis_candidate_id = source.id;
+    candidate.r1_name_override = false;
+    candidate.r1_pct_override = false;
+    registerElectionCandidate(state, election.id, source.name);
+    return candidate;
+  });
+  simulation.r1_hypothesis_id = hypothesis.id;
+  simulation.r1_excluded_hypothesis_candidate_ids = [];
+}
+
+function detachHypothesisFromSimulation(simulation) {
+  simulation.r1_hypothesis_id = null;
+  simulation.r1_excluded_hypothesis_candidate_ids = [];
+  simulation.candidates = simulation.candidates.map((candidate) => ({
+    ...candidate,
+    hypothesis_candidate_id: null,
+    r1_name_override: false,
+    r1_pct_override: false,
+  }));
+}
+
+function getSimulationPayload(simulation) {
+  return { ...serializeSimulation(simulation), election_id: simulation.election_id };
+}
+
+function syncUpdatedHypothesisCandidate(state, election, hypothesis, sourceCandidate) {
+  for (const simulation of state.simulations.filter((item) => (
+    item.election_id === election.id && item.r1_hypothesis_id === hypothesis.id
+  ))) {
+    const candidate = simulation.candidates.find((item) => item.hypothesis_candidate_id === sourceCandidate.id);
+    if (!candidate) continue;
+    if (!candidate.r1_name_override) candidate.name = sourceCandidate.name;
+    if (!candidate.r1_pct_override) candidate.pct_r1 = sourceCandidate.pct_r1;
+  }
 }
 
 // Toutes les opérations sont async pour garder le contrat "Promise" utilisé par les composants.
@@ -243,6 +383,7 @@ export const api = {
       name: (name || "").trim() || "Nouvelle élection",
       position: state.elections.length + 1,
       candidates: [],
+      hypotheses: [],
     };
     state.elections.push(election);
     saveState(state);
@@ -276,7 +417,10 @@ export const api = {
         ...candidate,
         usage_count: state.simulations
           .filter((simulation) => simulation.election_id === election.id)
-          .reduce((count, simulation) => count + simulation.candidates.filter((item) => item.name === candidate.name).length, 0),
+          .reduce((count, simulation) => count + simulation.candidates.filter((item) => item.name === candidate.name).length, 0)
+          + election.hypotheses.reduce((count, hypothesis) => (
+            count + hypothesis.candidates.filter((item) => item.name === candidate.name).length
+          ), 0),
       }));
   },
 
@@ -311,6 +455,11 @@ export const api = {
           if (scenarioCandidate.name === oldName) scenarioCandidate.name = name;
         }
       }
+      for (const hypothesis of election.hypotheses) {
+        for (const hypothesisCandidate of hypothesis.candidates) {
+          if (hypothesisCandidate.name === oldName) hypothesisCandidate.name = name;
+        }
+      }
     }
     if ("party" in payload) candidate.party = (payload.party || "").trim();
     saveState(state);
@@ -323,6 +472,129 @@ export const api = {
     election.candidates = election.candidates.filter((candidate) => candidate.id !== Number(candidateId));
     saveState(state);
     return api.listElectionCandidates(election.id);
+  },
+
+  listElectionHypotheses: async (electionId) => {
+    const election = findElection(loadState(), electionId);
+    return [...election.hypotheses]
+      .sort((a, b) => a.position - b.position || a.id - b.id)
+      .map((hypothesis) => ({ ...hypothesis, candidates: hypothesis.candidates.map((candidate) => ({ ...candidate })) }));
+  },
+
+  getElectionHypothesis: async (electionId, hypothesisId) => {
+    const election = findElection(loadState(), electionId);
+    const hypothesis = findHypothesis(election, hypothesisId);
+    return { ...hypothesis, candidates: hypothesis.candidates.map((candidate) => ({ ...candidate })) };
+  },
+
+  createElectionHypothesis: async (electionId) => {
+    const state = loadState();
+    const election = findElection(state, electionId);
+    const hypothesis = createHypothesisRecord(state, election);
+    saveState(state);
+    return { ...hypothesis, candidates: [] };
+  },
+
+  updateElectionHypothesis: async (electionId, hypothesisId, payload) => {
+    const state = loadState();
+    const election = findElection(state, electionId);
+    const hypothesis = findHypothesis(election, hypothesisId);
+    if ("name" in payload) {
+      const name = (payload.name || "").trim();
+      if (name) hypothesis.name = name;
+    }
+    if ("description" in payload) hypothesis.description = (payload.description || "").trim();
+    saveState(state);
+    return { ...hypothesis, candidates: hypothesis.candidates.map((candidate) => ({ ...candidate })) };
+  },
+
+  duplicateElectionHypothesis: async (electionId, hypothesisId) => {
+    const state = loadState();
+    const election = findElection(state, electionId);
+    const original = findHypothesis(election, hypothesisId);
+    const copy = createHypothesisRecord(state, election, {
+      name: `${original.name} (copie)`,
+      description: original.description,
+    });
+    for (const candidate of original.candidates) {
+      createHypothesisCandidateRecord(state, election.id, copy, candidate);
+    }
+    saveState(state);
+    return { ...copy, candidates: copy.candidates.map((candidate) => ({ ...candidate })) };
+  },
+
+  deleteElectionHypothesis: async (electionId, hypothesisId) => {
+    const state = loadState();
+    const election = findElection(state, electionId);
+    findHypothesis(election, hypothesisId);
+    for (const simulation of state.simulations.filter((item) => (
+      item.election_id === election.id && item.r1_hypothesis_id === Number(hypothesisId)
+    ))) {
+      detachHypothesisFromSimulation(simulation);
+    }
+    election.hypotheses = election.hypotheses.filter((item) => item.id !== Number(hypothesisId));
+    saveState(state);
+    return { status: "ok" };
+  },
+
+  addHypothesisCandidate: async (electionId, hypothesisId, payload) => {
+    const state = loadState();
+    const election = findElection(state, electionId);
+    const hypothesis = findHypothesis(election, hypothesisId);
+    const name = (payload.name || "").trim();
+    if (!name) throw new Error("Le nom du candidat est obligatoire.");
+    const candidate = createHypothesisCandidateRecord(state, election.id, hypothesis, {
+      name,
+      pct_r1: Math.max(toFloat(payload.pct_r1, 0), 0),
+    });
+    for (const simulation of state.simulations.filter((item) => (
+      item.election_id === election.id && item.r1_hypothesis_id === hypothesis.id
+    ))) {
+      if (simulation.r1_excluded_hypothesis_candidate_ids.includes(candidate.id)) continue;
+      createCandidateRecord(state, simulation, {
+        ...candidate,
+        hypothesis_candidate_id: candidate.id,
+      });
+    }
+    saveState(state);
+    return { ...hypothesis, candidates: hypothesis.candidates.map((candidate) => ({ ...candidate })) };
+  },
+
+  updateHypothesisCandidate: async (electionId, hypothesisId, candidateId, payload) => {
+    const state = loadState();
+    const election = findElection(state, electionId);
+    const hypothesis = findHypothesis(election, hypothesisId);
+    const candidate = findHypothesisCandidate(hypothesis, candidateId);
+    if ("name" in payload) {
+      const name = (payload.name || "").trim();
+      if (name) {
+        candidate.name = name;
+        registerElectionCandidate(state, election.id, name);
+      }
+    }
+    if ("pct_r1" in payload) candidate.pct_r1 = Math.max(toFloat(payload.pct_r1, candidate.pct_r1), 0);
+    syncUpdatedHypothesisCandidate(state, election, hypothesis, candidate);
+    saveState(state);
+    return { ...hypothesis, candidates: hypothesis.candidates.map((item) => ({ ...item })) };
+  },
+
+  deleteHypothesisCandidate: async (electionId, hypothesisId, candidateId) => {
+    const state = loadState();
+    const election = findElection(state, electionId);
+    const hypothesis = findHypothesis(election, hypothesisId);
+    findHypothesisCandidate(hypothesis, candidateId);
+    hypothesis.candidates = hypothesis.candidates.filter((item) => item.id !== Number(candidateId));
+    for (const simulation of state.simulations.filter((item) => (
+      item.election_id === election.id && item.r1_hypothesis_id === hypothesis.id
+    ))) {
+      simulation.candidates = simulation.candidates.filter((candidate) => (
+        candidate.hypothesis_candidate_id !== Number(candidateId)
+      ));
+      simulation.r1_excluded_hypothesis_candidate_ids = simulation.r1_excluded_hypothesis_candidate_ids
+        .filter((id) => id !== Number(candidateId));
+    }
+    saveState(state);
+    return { ...hypothesis, candidates: hypothesis.candidates.map((candidate) => ({ ...candidate })) };
   },
 
   listSimulations: async (electionId) =>
@@ -341,7 +613,63 @@ export const api = {
     const state = loadState();
     const simulation = findSimulation(state, simulationId ?? id);
     if (simulationId != null && simulation.election_id !== Number(id)) throw new Error("Scénario introuvable.");
-    return { ...serializeSimulation(simulation), election_id: simulation.election_id };
+    return getSimulationPayload(simulation);
+  },
+
+  setSimulationFirstRoundHypothesis: async (electionId, simulationId, hypothesisId) => {
+    const state = loadState();
+    const election = findElection(state, electionId);
+    const simulation = findSimulation(state, simulationId);
+    if (simulation.election_id !== election.id) throw new Error("Scénario introuvable.");
+    if (hypothesisId == null) {
+      detachHypothesisFromSimulation(simulation);
+    } else {
+      const hypothesis = findHypothesis(election, hypothesisId);
+      applyHypothesisToSimulation(state, election, simulation, hypothesis);
+    }
+    saveState(state);
+    return getSimulationPayload(simulation);
+  },
+
+  resetSimulationFirstRoundHypothesis: async (electionId, simulationId) => {
+    const state = loadState();
+    const election = findElection(state, electionId);
+    const simulation = findSimulation(state, simulationId);
+    if (simulation.election_id !== election.id || simulation.r1_hypothesis_id == null) {
+      throw new Error("Aucune hypothèse n'est sélectionnée pour ce scénario.");
+    }
+    const hypothesis = findHypothesis(election, simulation.r1_hypothesis_id);
+    applyHypothesisToSimulation(state, election, simulation, hypothesis);
+    saveState(state);
+    return getSimulationPayload(simulation);
+  },
+
+  saveSimulationAsFirstRoundHypothesis: async (electionId, simulationId, candidateValues) => {
+    const state = loadState();
+    const election = findElection(state, electionId);
+    const simulation = findSimulation(state, simulationId);
+    if (simulation.election_id !== election.id) throw new Error("Scénario introuvable.");
+    const values = Array.isArray(candidateValues) ? candidateValues : simulation.candidates;
+    const hypothesis = createHypothesisRecord(state, election);
+    const sourceCandidates = values.map((candidate) => createHypothesisCandidateRecord(state, election.id, hypothesis, {
+      name: String(candidate.name || "").trim(),
+      pct_r1: Math.max(toFloat(candidate.pct_r1, 0), 0),
+    }));
+    simulation.r1_hypothesis_id = hypothesis.id;
+    simulation.r1_excluded_hypothesis_candidate_ids = [];
+    simulation.candidates = simulation.candidates.map((candidate, index) => ({
+      ...candidate,
+      name: sourceCandidates[index].name,
+      pct_r1: sourceCandidates[index].pct_r1,
+      hypothesis_candidate_id: sourceCandidates[index].id,
+      r1_name_override: false,
+      r1_pct_override: false,
+    })).slice(0, sourceCandidates.length);
+    saveState(state);
+    return {
+      hypothesis: { ...hypothesis, candidates: hypothesis.candidates.map((candidate) => ({ ...candidate })) },
+      simulation: getSimulationPayload(simulation),
+    };
   },
 
   createSimulation: async (electionId, name) => {
@@ -421,9 +749,18 @@ export const api = {
       abstention_r1: original.abstention_r1,
       abstention_to_a: original.abstention_to_a,
       abstention_to_b: original.abstention_to_b,
+      r1_hypothesis_id: original.r1_hypothesis_id,
+      r1_excluded_hypothesis_candidate_ids: [...original.r1_excluded_hypothesis_candidate_ids],
     });
     for (const c of original.candidates) {
-      createCandidateRecord(state, copy, { name: c.name, pct_r1: c.pct_r1, ...c.transfer });
+      createCandidateRecord(state, copy, {
+        name: c.name,
+        pct_r1: c.pct_r1,
+        ...c.transfer,
+        hypothesis_candidate_id: c.hypothesis_candidate_id,
+        r1_name_override: c.r1_name_override,
+        r1_pct_override: c.r1_pct_override,
+      });
     }
     saveState(state);
     return { ...serializeSimulation(copy), election_id: copy.election_id };
@@ -448,18 +785,34 @@ export const api = {
   updateCandidate: (id, candidateId, data) =>
     mutate(id, (simulation, state) => {
       const candidate = findCandidate(simulation, candidateId);
+      const hypothesis = simulation.r1_hypothesis_id == null
+        ? null
+        : findElection(state, simulation.election_id).hypotheses.find((item) => item.id === simulation.r1_hypothesis_id);
+      const source = hypothesis?.candidates.find((item) => item.id === candidate.hypothesis_candidate_id);
       if ("name" in data) {
         const name = (data.name || "").trim();
         if (name) {
           candidate.name = name;
+          if (candidate.hypothesis_candidate_id != null) {
+            candidate.r1_name_override = source ? name !== source.name : true;
+          }
           registerElectionCandidate(state, simulation.election_id, name);
         }
       }
-      if ("pct_r1" in data) candidate.pct_r1 = Math.max(toFloat(data.pct_r1, candidate.pct_r1), 0);
+      if ("pct_r1" in data) {
+        candidate.pct_r1 = Math.max(toFloat(data.pct_r1, candidate.pct_r1), 0);
+        if (candidate.hypothesis_candidate_id != null) {
+          candidate.r1_pct_override = source ? candidate.pct_r1 !== source.pct_r1 : true;
+        }
+      }
     }),
 
   deleteCandidate: (id, candidateId) =>
     mutate(id, (simulation) => {
+      const candidate = findCandidate(simulation, candidateId);
+      if (candidate.hypothesis_candidate_id != null && simulation.r1_hypothesis_id != null) {
+        simulation.r1_excluded_hypothesis_candidate_ids.push(candidate.hypothesis_candidate_id);
+      }
       simulation.candidates = simulation.candidates.filter((c) => c.id !== Number(candidateId));
     }),
 
