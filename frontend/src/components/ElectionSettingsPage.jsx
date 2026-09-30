@@ -306,34 +306,34 @@ export default function ElectionSettingsPage() {
         {hypotheses.length === 0 ? (
           <p className="hint">Aucune hypothèse enregistrée pour cette élection.</p>
         ) : (
-          <ul className="hypothesis-list">
+          <ul className="hypothesis-settings-list">
             {hypotheses.map((hypothesis) => {
               const finalists = [...hypothesis.candidates]
                 .sort((a, b) => Number(b.pct_r1) - Number(a.pct_r1))
                 .slice(0, 2);
+              const summary = finalists.length === 2
+                ? `${finalists[0].name} ${finalists[0].pct_r1}% · ${finalists[1].name} ${finalists[1].pct_r1}%`
+                : "Moins de deux candidats";
               return (
-                <li key={hypothesis.id} className="hypothesis-list-item">
-                  <div className="hypothesis-list-content">
-                    <NavLink
-                      className="hypothesis-list-link"
-                      to={`/elections/${election.id}/hypotheses/${hypothesis.id}`}
-                    >
-                      {hypothesis.name}
-                    </NavLink>
-                    <p className="hypothesis-finalists">
-                      {finalists.length === 2
-                        ? `En tête : ${finalists[0].name} (${finalists[0].pct_r1}%) · ${finalists[1].name} (${finalists[1].pct_r1}%)`
-                        : "Ajoutez au moins deux candidats pour voir les deux premiers."}
-                    </p>
-                    {hypothesis.tag_ids.length > 0 && (
-                      <div className="tag-list">
+                <li key={hypothesis.id} className="hypothesis-settings-row">
+                  <NavLink
+                    className="hypothesis-settings-link"
+                    to={`/elections/${election.id}/hypotheses/${hypothesis.id}`}
+                    aria-label={`Modifier l'hypothèse ${hypothesis.name}`}
+                  >
+                    <span className="hypothesis-settings-main">
+                      <span className="hypothesis-settings-name">{hypothesis.name}</span>
+                      {hypothesis.tag_ids.length > 0 && (
+                        <span className="tag-list">
                         {hypothesis.tag_ids
                           .map((id) => tags.find((tag) => tag.id === id))
                           .filter(Boolean)
                           .map((tag) => <TagChip key={tag.id} tag={tag} />)}
-                      </div>
-                    )}
-                  </div>
+                        </span>
+                      )}
+                    </span>
+                    <span className="hypothesis-settings-summary" title={summary}>{summary}</span>
+                  </NavLink>
                   <button
                     type="button"
                     className="danger row-delete hypothesis-delete"

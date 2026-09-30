@@ -62,39 +62,80 @@
   color: #374151;
 }
 
-.hypothesis-list {
+.hypothesis-settings-list {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.hypothesis-list-item {
+.hypothesis-settings-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px 0;
+  gap: 8px;
+  min-height: 42px;
+  padding-right: 4px;
+  border-bottom: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.hypothesis-settings-row:first-child {
   border-top: 1px solid var(--border);
 }
 
-.hypothesis-list-content {
-  min-width: 0;
+.hypothesis-settings-row:hover {
+  background: #f8fafc;
 }
 
-.hypothesis-list-link {
+.hypothesis-settings-link {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 8px;
   color: var(--text);
-  font-weight: 600;
   text-decoration: none;
 }
 
-.hypothesis-list-link:hover {
+.hypothesis-settings-main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.hypothesis-settings-name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hypothesis-settings-link:hover .hypothesis-settings-name {
   color: var(--accent-dark);
 }
 
-.hypothesis-finalists {
-  margin: 4px 0 0;
+.hypothesis-settings-main .tag-list {
+  flex-wrap: nowrap;
+  margin: 0;
+  overflow: hidden;
+}
+
+.hypothesis-settings-main .tag-chip {
+  padding: 0 7px;
+  font-size: 0.7rem;
+}
+
+.hypothesis-settings-summary {
+  flex-shrink: 0;
+  max-width: 42%;
+  overflow: hidden;
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .hypothesis-delete {
@@ -375,12 +416,8 @@
 }
 
 @media (max-width: 700px) {
-  .hypothesis-list-item {
-    align-items: flex-start;
-  }
-
-  .hypothesis-list .hypothesis-finalists {
-    overflow-wrap: anywhere;
+  .hypothesis-settings-summary {
+    display: none;
   }
 
   .candidate-table-actions {
