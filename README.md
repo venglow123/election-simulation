@@ -137,7 +137,14 @@ pas le calcul (utile pour explorer des scénarios en cours de saisie).
 frontend/
   src/
     App.jsx                    # Routes workspaces (react-router, HashRouter)
-    api.js                     # Persistance localStorage et migration v1 vers v2
+    api.js                     # Façade publique stable des opérations locales
+    api/storage.js             # Persistance localStorage, migration v1 vers v2
+    api/model.js               # Helpers de création, recherche et synchronisation
+    api/elections.js           # Élections et référentiel de candidats
+    api/hypotheses.js          # Hypothèses et candidats du premier tour
+    api/simulations.js         # Scénarios, reports de voix et import
+    styles.css                 # Point d'entrée ordonné des feuilles CSS
+    styles/                    # Base, layout, contrôles, résultats et vues métier
     context/SimulationsContext.jsx  # Élections et scénarios actifs partagés
     hooks/useGridNavigation.js # Navigation clavier façon tableur dans les tableaux éditables
     components/EditableTable.jsx # Enveloppe configurable partagée par les tableaux éditables
@@ -149,6 +156,11 @@ frontend/
 Dockerfile          # Multi-stage : build Node du frontend, puis nginx statique
 docker-compose.yml
 ```
+
+Les feuilles CSS restent globales : les sélecteurs sont partagés par plusieurs
+composants. Leur ordre est conservé dans `styles.css` pour préserver la cascade.
+Les composants continuent d'importer `api.js`; les détails de stockage et les
+opérations par domaine sont internes à `api/`.
 
 ## Développement local avec rechargement à chaud
 

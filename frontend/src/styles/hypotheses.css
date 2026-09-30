@@ -1,0 +1,262 @@
+.hypothesis-editor-page {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.breadcrumbs {
+  margin-bottom: 8px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.breadcrumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.breadcrumbs li {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.breadcrumbs a {
+  color: #087f8c;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.breadcrumbs .breadcrumbs-link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #087f8c;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.breadcrumbs a:hover,
+.breadcrumbs .breadcrumbs-link-button:hover {
+  color: #075e68;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.breadcrumbs a:focus-visible,
+.breadcrumbs .breadcrumbs-link-button:focus-visible {
+  border-radius: 2px;
+  outline: 2px solid #087f8c;
+  outline-offset: 3px;
+}
+
+.breadcrumbs-separator {
+  color: #9ca3af;
+}
+
+.breadcrumbs [aria-current="page"] {
+  color: #374151;
+}
+
+.hypothesis-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hypothesis-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.hypothesis-list-content {
+  min-width: 0;
+}
+
+.hypothesis-list-link {
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.hypothesis-list-link:hover {
+  color: var(--accent-dark);
+}
+
+.hypothesis-finalists {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.hypothesis-delete {
+  flex-shrink: 0;
+  opacity: 1;
+}
+
+.candidate-table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  margin: -4px 0 12px;
+}
+
+.candidate-table-actions .btn-ghost {
+  padding: 6px 8px;
+  font-size: 0.78rem;
+}
+
+.assumption-diff {
+  border-left: 3px solid #d97706 !important;
+  background-color: #fff7e8 !important;
+}
+
+.autocomplete.assumption-diff {
+  border-radius: 4px;
+}
+
+.hypothesis-picker-dialog {
+  width: min(780px, 100%);
+}
+
+.hypothesis-picker-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.hypothesis-picker-body > .hint,
+.hypothesis-picker-body > .form-error {
+  margin: 0;
+}
+
+.hypothesis-picker-custom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.hypothesis-picker-custom > span:first-child,
+.hypothesis-picker-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.hypothesis-picker-custom small,
+.hypothesis-picker-item-info > span {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.hypothesis-picker-custom:hover strong,
+.hypothesis-picker-item-info strong {
+  color: #087f8c;
+}
+
+.hypothesis-picker-current {
+  flex-shrink: 0;
+  color: #087f8c;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.hypothesis-picker-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hypothesis-picker-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.hypothesis-picker-item-actions,
+.hypothesis-picker-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.hypothesis-picker-description,
+.hypothesis-picker-leaders {
+  margin: 0;
+}
+
+.hypothesis-picker-leaders {
+  color: var(--text-muted);
+}
+
+.hypothesis-readonly-table {
+  width: 100%;
+}
+
+.hypothesis-picker-actions {
+  padding-top: 4px;
+}
+
+@media (max-width: 700px) {
+  .hypothesis-list-item {
+    align-items: flex-start;
+  }
+
+  .hypothesis-list .hypothesis-finalists {
+    overflow-wrap: anywhere;
+  }
+
+  .candidate-table-actions {
+    justify-content: flex-start;
+    width: 100%;
+    margin-top: 0;
+  }
+
+  .hypothesis-picker-list li {
+    align-items: flex-start;
+  }
+
+  .hypothesis-picker-item-actions {
+    flex-direction: column;
+    align-items: flex-end;
+  }
+}
+
+.election-danger-zone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-color: #f2c4c0;
+}
+
+.election-danger-zone h2,
+.election-danger-zone p {
+  margin: 0 0 6px;
+}
+

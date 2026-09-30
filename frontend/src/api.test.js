@@ -192,3 +192,20 @@ test("les changements d'une hypothèse alimentent ses scénarios liés sans écr
   assert.equal(saved.simulation.r1_hypothesis_id, saved.hypothesis.id);
   assert.deepEqual(saved.hypothesis.candidates.map((candidate) => candidate.pct_r1), [58, 42, 5]);
 });
+
+test("les opérations de simulation conservent leur contrat via la façade API", async () => {
+  resetStorage();
+  const election = await api.createElection("Municipales");
+  const simulation = await api.createSimulation(election.id, "Initiale");
+  const { new_candidate_id: candidateId } = await api.addCandidate(simulation.id, { name: "Alice", pct_r1: 55 });
+  await api.updateTransfer(simulation.id, candidateId, { pct_to_a: 70, pct_to_b: 20 });
+  await api.updateAbstentionTransfer(simulation.id, { pct_to_a: 10 });
+  const copy = await api.duplicateSimulation(simulation.id);
+
+  assert.equal(copy.candidates[0].transfer.pct_to_a, 70);
+  assert.equal(copy.abstention_to_a, 10);
+  await api.reorderSimulations(election.id, [copy.id, simulation.id]);
+  assert.deepEqual((await api.listSimulations(election.id)).map((item) => item.id), [copy.id, simulation.id]);
+  await api.deleteSimulation(simulation.id);
+  assert.deepEqual((await api.listSimulations(election.id)).map((item) => item.id), [copy.id]);
+});
