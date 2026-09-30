@@ -93,7 +93,8 @@ migration récupérable; les écritures ultérieures sont faites en v2.
 ## Déploiement sur GitHub Pages
 
 Le workflow `.github/workflows/deploy-pages.yml` teste, build et publie
-`frontend/dist` à chaque push sur `main`.
+`frontend/dist` lorsqu'un tag de version `v*` est poussé. Un push ou un merge
+sur `main` ne déploie pas l'application; il continue seulement d'exécuter la CI.
 
 Activation (une seule fois) : **Settings → Pages → Build and deployment →
 Source : GitHub Actions**.
@@ -101,6 +102,28 @@ Source : GitHub Actions**.
 Le build utilise des chemins relatifs (`base: "./"`) et un routage par hash
 (`#/elections/1/simulations/1`), ce qui fonctionne sous `https://<user>.github.io/<repo>/`
 sans configuration supplémentaire.
+
+### Publier une version
+
+Utiliser un numéro [SemVer](https://semver.org/lang/fr/) préfixé par `v`, puis
+pousser le tag :
+
+```powershell
+git tag -a v1.1.0 -m "Version 1.1.0"
+git push origin v1.1.0
+```
+
+Le tag est injecté dans le build et affiché en bas de la barre latérale. Après
+le déploiement, le workflow crée une GitHub Release **en brouillon** et génère
+les notes depuis les pull requests fusionnées depuis la version précédente.
+Dans l'onglet **Releases** du dépôt, compléter le résumé ou les instructions
+utiles, vérifier les notes générées, puis cliquer sur **Publish release**.
+
+Pour obtenir des notes lisibles, donner aux pull requests un titre orienté
+utilisateur, par exemple « Ajouter l'import d'un scénario depuis un QR code »
+ou « Corriger le calcul de l'abstention au second tour », et un de ces labels :
+`feature` ou `enhancement`, `bug` ou `fix`, `maintenance`, `dependencies` ou
+`documentation`. Le label `skip-changelog` exclut une pull request des notes.
 
 
 ## Utilisation

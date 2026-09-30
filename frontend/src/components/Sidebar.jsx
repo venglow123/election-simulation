@@ -128,6 +128,9 @@ export default function Sidebar() {
           }}
         />
       )}
+      <footer className="sidebar-version" aria-label={`Version ${__APP_VERSION__}`}>
+        v{__APP_VERSION__.replace(/^v/, "")}
+      </footer>
     </aside>
   );
 }

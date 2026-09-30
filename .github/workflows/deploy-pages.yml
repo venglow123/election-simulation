@@ -2,13 +2,11 @@ name: Deploy GitHub Pages
 
 on:
   push:
-    branches:
-      - main
-      - master
-  workflow_dispatch:
+    tags:
+      - "v*"
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -41,6 +39,8 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          VITE_APP_VERSION: ${{ github.ref_name }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
@@ -57,3 +57,25 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  release:
+    name: Create GitHub Release
+    needs:
+      - build
+      - deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists."
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --draft \
+              --generate-notes \
+              --title "$GITHUB_REF_NAME"
+          fi
