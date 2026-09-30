@@ -54,6 +54,7 @@ export function ensureDefaultElection(state) {
       position: 1,
       candidates: [],
       hypotheses: [],
+      tags: [],
     });
   }
   return state.elections[0];
@@ -125,6 +126,7 @@ export function createHypothesisRecord(state, election, fields = {}) {
     description: "",
     position: election.hypotheses.reduce((max, item) => Math.max(max, item.position), 0) + 1,
     candidates: [],
+    tag_ids: [],
     ...fields,
   };
   election.hypotheses.push(hypothesis);

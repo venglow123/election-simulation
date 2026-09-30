@@ -1,3 +1,5 @@
+import { isValidTagColor, TAG_PALETTE } from "../utils/tags.js";
+
 const STORAGE_KEY = "election-simulation:v2";
 const LEGACY_STORAGE_KEY = "election-simulation:v1";
 
@@ -10,6 +12,7 @@ function emptyState() {
     nextElectionCandidateId: 1,
     nextHypothesisId: 1,
     nextHypothesisCandidateId: 1,
+    nextTagId: 1,
     nextSimulationId: 1,
     nextCandidateId: 1,
     elections: [],
@@ -21,36 +24,51 @@ function maxId(records) {
   return records.reduce((max, record) => Math.max(max, Number(record.id) || 0), 0);
 }
 
+function normalizeElection(election, index) {
+  const tags = Array.isArray(election.tags) ? election.tags.map((tag, tagIndex) => ({
+    ...tag,
+    id: Number(tag.id) || tagIndex + 1,
+    name: String(tag.name || ""),
+    color: isValidTagColor(tag.color) ? String(tag.color).toLowerCase() : TAG_PALETTE[tagIndex % TAG_PALETTE.length],
+  })) : [];
+  const tagIds = new Set(tags.map((tag) => tag.id));
+  return {
+    ...election,
+    id: Number(election.id) || index + 1,
+    name: String(election.name || "Nouvelle élection"),
+    position: Number.isFinite(Number(election.position)) ? Number(election.position) : index + 1,
+    tags,
+    candidates: Array.isArray(election.candidates) ? election.candidates.map((candidate, candidateIndex) => ({
+      ...candidate,
+      id: Number(candidate.id) || candidateIndex + 1,
+      name: String(candidate.name || ""),
+      party: String(candidate.party || ""),
+    })) : [],
+    hypotheses: Array.isArray(election.hypotheses) ? election.hypotheses.map((hypothesis, hypothesisIndex) => ({
+      ...hypothesis,
+      id: Number(hypothesis.id) || hypothesisIndex + 1,
+      name: String(hypothesis.name || "Nouvelle hypothèse"),
+      description: String(hypothesis.description || ""),
+      position: Number.isFinite(Number(hypothesis.position)) ? Number(hypothesis.position) : hypothesisIndex + 1,
+      tag_ids: Array.isArray(hypothesis.tag_ids)
+        ? [...new Set(hypothesis.tag_ids.map(Number))].filter((id) => tagIds.has(id))
+        : [],
+      candidates: Array.isArray(hypothesis.candidates) ? hypothesis.candidates.map((candidate, candidateIndex) => ({
+        ...candidate,
+        id: Number(candidate.id) || candidateIndex + 1,
+        name: String(candidate.name || ""),
+        pct_r1: Number.isFinite(Number(candidate.pct_r1)) ? Number(candidate.pct_r1) : 0,
+      })) : [],
+    })) : [],
+  };
+}
+
 function normalizeState(raw) {
   if (!raw || !Array.isArray(raw.simulations)) return emptyState();
   const state = {
     ...emptyState(),
     ...raw,
-    elections: Array.isArray(raw.elections) ? raw.elections.map((election, index) => ({
-      ...election,
-      id: Number(election.id) || index + 1,
-      name: String(election.name || "Nouvelle élection"),
-      position: Number.isFinite(Number(election.position)) ? Number(election.position) : index + 1,
-      candidates: Array.isArray(election.candidates) ? election.candidates.map((candidate, candidateIndex) => ({
-        ...candidate,
-        id: Number(candidate.id) || candidateIndex + 1,
-        name: String(candidate.name || ""),
-        party: String(candidate.party || ""),
-      })) : [],
-      hypotheses: Array.isArray(election.hypotheses) ? election.hypotheses.map((hypothesis, hypothesisIndex) => ({
-        ...hypothesis,
-        id: Number(hypothesis.id) || hypothesisIndex + 1,
-        name: String(hypothesis.name || "Nouvelle hypothèse"),
-        description: String(hypothesis.description || ""),
-        position: Number.isFinite(Number(hypothesis.position)) ? Number(hypothesis.position) : hypothesisIndex + 1,
-        candidates: Array.isArray(hypothesis.candidates) ? hypothesis.candidates.map((candidate, candidateIndex) => ({
-          ...candidate,
-          id: Number(candidate.id) || candidateIndex + 1,
-          name: String(candidate.name || ""),
-          pct_r1: Number.isFinite(Number(candidate.pct_r1)) ? Number(candidate.pct_r1) : 0,
-        })) : [],
-      })) : [],
-    })) : [],
+    elections: Array.isArray(raw.elections) ? raw.elections.map(normalizeElection) : [],
     simulations: raw.simulations.map((simulation, index) => ({
       ...simulation,
       id: Number(simulation.id) || index + 1,
@@ -82,6 +100,7 @@ function normalizeState(raw) {
       position: state.elections.length + 1,
       candidates: [],
       hypotheses: [],
+      tags: [],
     };
     const candidateNames = new Set();
     for (const simulation of unassigned) {
@@ -107,6 +126,10 @@ function normalizeState(raw) {
   state.nextHypothesisCandidateId = Math.max(
     Number(state.nextHypothesisCandidateId) || 1,
     ...state.elections.flatMap((election) => election.hypotheses.map((hypothesis) => maxId(hypothesis.candidates) + 1))
+  );
+  state.nextTagId = Math.max(
+    Number(state.nextTagId) || 1,
+    ...state.elections.map((election) => maxId(election.tags) + 1)
   );
   state.nextSimulationId = Math.max(Number(state.nextSimulationId) || 1, maxId(state.simulations) + 1);
   state.nextCandidateId = Math.max(

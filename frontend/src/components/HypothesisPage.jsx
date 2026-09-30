@@ -6,6 +6,7 @@ import { debounceByKey, flushDebouncedByPrefix } from "../utils/debounceByKey.js
 import Breadcrumbs from "./Breadcrumbs.jsx";
 import CandidatesTable from "./CandidatesTable.jsx";
 import ScenarioHeader from "./ScenarioHeader.jsx";
+import TagInput from "./TagInput.jsx";
 
 const SAVE_DELAY = 400;
 
@@ -18,6 +19,7 @@ export default function HypothesisPage() {
   const election = elections.find((item) => item.id === electionId);
   const [hypothesis, setHypothesis] = useState(null);
   const [candidateOptions, setCandidateOptions] = useState([]);
+  const [tags, setTags] = useState([]);
   const [notFound, setNotFound] = useState(false);
   const [saveError, setSaveError] = useState("");
 
@@ -28,9 +30,11 @@ export default function HypothesisPage() {
     Promise.all([
       api.getElectionHypothesis(electionId, hypothesisId),
       api.listElectionCandidates(electionId),
-    ]).then(([data, options]) => {
+      api.listElectionTags(electionId),
+    ]).then(([data, options, tagList]) => {
       if (!cancelled) setHypothesis(data);
       if (!cancelled) setCandidateOptions(options);
+      if (!cancelled) setTags(tagList);
     }).catch(() => {
       if (!cancelled) setNotFound(true);
     });
@@ -69,6 +73,27 @@ export default function HypothesisPage() {
       state: location.state?.returnTo ? { returnTo: location.state.returnTo } : null,
     });
   }, [navigate, location.pathname, location.state]);
+
+  async function saveTagIds(tagIds) {
+    setHypothesis((current) => current ? { ...current, tag_ids: tagIds } : current);
+    try {
+      const updated = await api.updateElectionHypothesis(electionId, hypothesisId, { tag_ids: tagIds });
+      setHypothesis((current) => current ? { ...current, tag_ids: updated.tag_ids } : current);
+      setSaveError("");
+    } catch (error) {
+      setSaveError(error.message);
+    }
+  }
+
+  async function handleCreateTag(name) {
+    try {
+      const tag = await api.createElectionTag(electionId, { name });
+      setTags(await api.listElectionTags(electionId));
+      await saveTagIds([...hypothesis.tag_ids, tag.id]);
+    } catch (error) {
+      setSaveError(error.message);
+    }
+  }
 
   async function handleCreateCandidate(payload) {
     const updated = await api.addHypothesisCandidate(electionId, hypothesisId, payload);
@@ -123,6 +148,13 @@ export default function HypothesisPage() {
         descriptionPlaceholder="Description de cette hypothèse du premier tour"
         autoFocusTitle={Boolean(location.state?.focusTitle)}
         onTitleFocused={clearFocusTitleFlag}
+      />
+      <TagInput
+        tags={tags}
+        selectedIds={hypothesis.tag_ids}
+        onAdd={(tagId) => saveTagIds([...hypothesis.tag_ids, tagId])}
+        onCreate={handleCreateTag}
+        onRemove={(tagId) => saveTagIds(hypothesis.tag_ids.filter((id) => id !== tagId))}
       />
       {saveError && <p className="form-error">{saveError}</p>}
       <CandidatesTable

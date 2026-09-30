@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../api.js";
+import { filterHypothesesByTags, getRefinementTags } from "../utils/tags.js";
 import Breadcrumbs from "./Breadcrumbs.jsx";
+import TagChip from "./TagChip.jsx";
 
 function getLeaders(hypothesis) {
   return [...hypothesis.candidates]
@@ -11,6 +13,8 @@ function getLeaders(hypothesis) {
 
 export default function FirstRoundHypothesisModal({ electionId, selectedHypothesisId, onSelect, onClose }) {
   const [hypotheses, setHypotheses] = useState([]);
+  const [tags, setTags] = useState([]);
+  const [selectedTagIds, setSelectedTagIds] = useState([]);
   const [activeHypothesis, setActiveHypothesis] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -18,8 +22,12 @@ export default function FirstRoundHypothesisModal({ electionId, selectedHypothes
 
   useEffect(() => {
     let cancelled = false;
-    api.listElectionHypotheses(electionId).then((data) => {
+    Promise.all([
+      api.listElectionHypotheses(electionId),
+      api.listElectionTags(electionId),
+    ]).then(([data, tagList]) => {
       if (!cancelled) setHypotheses(data);
+      if (!cancelled) setTags(tagList);
     }).catch((loadError) => {
       if (!cancelled) setError(loadError.message);
     }).finally(() => {
@@ -60,6 +68,26 @@ export default function FirstRoundHypothesisModal({ electionId, selectedHypothes
   }
 
   const leaders = activeHypothesis ? getLeaders(activeHypothesis) : [];
+  const tagsById = useMemo(() => new Map(tags.map((tag) => [tag.id, tag])), [tags]);
+  const filteredHypotheses = useMemo(
+    () => filterHypothesesByTags(hypotheses, selectedTagIds),
+    [hypotheses, selectedTagIds]
+  );
+  const refinementTags = useMemo(
+    () => getRefinementTags(tags, filteredHypotheses, selectedTagIds),
+    [tags, filteredHypotheses, selectedTagIds]
+  );
+  const selectedTags = selectedTagIds.map((id) => tagsById.get(id)).filter(Boolean);
+
+  function renderHypothesisTags(hypothesis) {
+    const hypothesisTags = hypothesis.tag_ids.map((id) => tagsById.get(id)).filter(Boolean);
+    if (!hypothesisTags.length) return null;
+    return (
+      <div className="tag-list">
+        {hypothesisTags.map((tag) => <TagChip key={tag.id} tag={tag} />)}
+      </div>
+    );
+  }
 
   return createPortal(
     <div className="detail-overlay" role="presentation" onMouseDown={onClose}>
@@ -98,6 +126,7 @@ export default function FirstRoundHypothesisModal({ electionId, selectedHypothes
           ) : activeHypothesis ? (
             <>
               {activeHypothesis.description && <p className="hypothesis-picker-description">{activeHypothesis.description}</p>}
+              {renderHypothesisTags(activeHypothesis)}
               {leaders.length === 2 && (
                 <p className="hypothesis-picker-leaders">
                   En tête : <strong>{leaders[0].name}</strong> ({leaders[0].pct_r1}%) · <strong>{leaders[1].name}</strong> ({leaders[1].pct_r1}%)
@@ -141,8 +170,33 @@ export default function FirstRoundHypothesisModal({ electionId, selectedHypothes
               {hypotheses.length === 0 ? (
                 <p className="hint">Aucune hypothèse enregistrée. Vous pouvez continuer avec Custom.</p>
               ) : (
+                <>
+                {(selectedTags.length > 0 || refinementTags.length > 0) && (
+                  <div className="hypothesis-tag-filter" aria-label="Filtrer par tags">
+                    {selectedTags.map((tag) => (
+                      <TagChip
+                        key={tag.id}
+                        tag={tag}
+                        onRemove={() => setSelectedTagIds((current) => current.filter((id) => id !== tag.id))}
+                      />
+                    ))}
+                    {refinementTags.length > 0 && (
+                      <span className="hypothesis-tag-filter-label">
+                        {selectedTags.length ? "Affiner :" : "Filtrer :"}
+                      </span>
+                    )}
+                    {refinementTags.map((tag) => (
+                      <TagChip
+                        key={tag.id}
+                        tag={tag}
+                        title={`Filtrer sur ${tag.name}`}
+                        onClick={() => setSelectedTagIds((current) => [...current, tag.id])}
+                      />
+                    ))}
+                  </div>
+                )}
                 <ul className="hypothesis-picker-list">
-                  {hypotheses.map((hypothesis) => {
+                  {filteredHypotheses.map((hypothesis) => {
                     const topCandidates = getLeaders(hypothesis);
                     return (
                       <li key={hypothesis.id}>
@@ -153,6 +207,7 @@ export default function FirstRoundHypothesisModal({ electionId, selectedHypothes
                               ? `${topCandidates[0].name} (${topCandidates[0].pct_r1}%) · ${topCandidates[1].name} (${topCandidates[1].pct_r1}%)`
                               : "Moins de deux candidats"}
                           </span>
+                          {renderHypothesisTags(hypothesis)}
                         </div>
                         <div className="hypothesis-picker-item-actions">
                           {selectedHypothesisId === hypothesis.id && <span className="hypothesis-picker-current">Sélectionnée</span>}
@@ -167,6 +222,7 @@ export default function FirstRoundHypothesisModal({ electionId, selectedHypothes
                     );
                   })}
                 </ul>
+                </>
               )}
             </>
           )}

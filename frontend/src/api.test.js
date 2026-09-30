@@ -193,6 +193,35 @@ test("les changements d'une hypothèse alimentent ses scénarios liés sans écr
   assert.deepEqual(saved.hypothesis.candidates.map((candidate) => candidate.pct_r1), [58, 42, 5]);
 });
 
+test("les tags d'hypothèses sont administrables par élection et suivent les hypothèses", async () => {
+  resetStorage();
+  const election = await api.createElection("Municipales");
+  const other = await api.createElection("Présidentielle");
+  const left = await api.createElectionTag(election.id, { name: "Gauche unie" });
+  const right = await api.createElectionTag(election.id, { name: "Droite", color: "#AABBCC" });
+
+  assert.match(left.color, /^#[0-9a-f]{6}$/);
+  assert.notEqual(left.color, right.color);
+  assert.equal(right.color, "#aabbcc");
+  await assert.rejects(api.createElectionTag(election.id, { name: "gauche UNIE" }), /existe déjà/);
+  assert.equal((await api.listElectionTags(other.id)).length, 0);
+
+  const hypothesis = await api.createElectionHypothesis(election.id);
+  const tagged = await api.updateElectionHypothesis(election.id, hypothesis.id, {
+    tag_ids: [left.id, right.id, left.id, 999],
+  });
+  assert.deepEqual(tagged.tag_ids, [left.id, right.id]);
+  const copy = await api.duplicateElectionHypothesis(election.id, hypothesis.id);
+  assert.deepEqual(copy.tag_ids, [left.id, right.id]);
+
+  const renamed = await api.updateElectionTag(election.id, left.id, { name: "Gauche", color: "#112233" });
+  assert.deepEqual(renamed.map((tag) => [tag.name, tag.usage_count]), [["Droite", 2], ["Gauche", 2]]);
+  await assert.rejects(api.updateElectionTag(election.id, left.id, { name: "droite" }), /existe déjà/);
+
+  await api.deleteElectionTag(election.id, right.id);
+  assert.deepEqual((await api.getElectionHypothesis(election.id, copy.id)).tag_ids, [left.id]);
+});
+
 test("les opérations de simulation conservent leur contrat via la façade API", async () => {
   resetStorage();
   const election = await api.createElection("Municipales");

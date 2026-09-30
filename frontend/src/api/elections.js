@@ -1,5 +1,22 @@
 import { loadState, saveState } from "./storage.js";
 import { findElection, registerElectionCandidate } from "./model.js";
+import { isValidTagColor, normalizeTagName, pickTagColor } from "../utils/tags.js";
+
+function serializeTags(election) {
+  return [...election.tags]
+    .sort((a, b) => a.name.localeCompare(b.name, "fr"))
+    .map((tag) => ({
+      ...tag,
+      usage_count: election.hypotheses.filter((hypothesis) => hypothesis.tag_ids.includes(tag.id)).length,
+    }));
+}
+
+function assertUniqueTagName(election, name, ignoredId = null) {
+  const normalized = normalizeTagName(name);
+  if (election.tags.some((tag) => tag.id !== ignoredId && normalizeTagName(tag.name) === normalized)) {
+    throw new Error(`Le tag « ${name} » existe déjà dans cette élection.`);
+  }
+}
 
 export const electionApi = {
   listElections: async () => {
@@ -31,6 +48,7 @@ export const electionApi = {
       position: state.elections.length + 1,
       candidates: [],
       hypotheses: [],
+      tags: [],
     };
     state.elections.push(election);
     saveState(state);
@@ -119,6 +137,56 @@ export const electionApi = {
     election.candidates = election.candidates.filter((candidate) => candidate.id !== Number(candidateId));
     saveState(state);
     return electionApi.listElectionCandidates(election.id);
+  },
+
+  listElectionTags: async (electionId) => serializeTags(findElection(loadState(), electionId)),
+
+  createElectionTag: async (electionId, payload) => {
+    const state = loadState();
+    const election = findElection(state, electionId);
+    const name = String(payload.name || "").trim();
+    if (!name) throw new Error("Le nom du tag est obligatoire.");
+    assertUniqueTagName(election, name);
+    const tag = {
+      id: state.nextTagId++,
+      name,
+      color: isValidTagColor(payload.color)
+        ? payload.color.toLowerCase()
+        : pickTagColor(election.tags.map((item) => item.color)),
+    };
+    election.tags.push(tag);
+    saveState(state);
+    return { ...tag, usage_count: 0 };
+  },
+
+  updateElectionTag: async (electionId, tagId, payload) => {
+    const state = loadState();
+    const election = findElection(state, electionId);
+    const tag = election.tags.find((item) => item.id === Number(tagId));
+    if (!tag) throw new Error("Tag introuvable.");
+    if ("name" in payload) {
+      const name = String(payload.name || "").trim();
+      if (!name) throw new Error("Le nom du tag est obligatoire.");
+      assertUniqueTagName(election, name, tag.id);
+      tag.name = name;
+    }
+    if ("color" in payload) {
+      if (!isValidTagColor(payload.color)) throw new Error("Couleur de tag invalide.");
+      tag.color = payload.color.toLowerCase();
+    }
+    saveState(state);
+    return serializeTags(election);
+  },
+
+  deleteElectionTag: async (electionId, tagId) => {
+    const state = loadState();
+    const election = findElection(state, electionId);
+    election.tags = election.tags.filter((tag) => tag.id !== Number(tagId));
+    for (const hypothesis of election.hypotheses) {
+      hypothesis.tag_ids = hypothesis.tag_ids.filter((id) => id !== Number(tagId));
+    }
+    saveState(state);
+    return serializeTags(election);
   },
 
 };

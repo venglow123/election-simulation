@@ -4,6 +4,8 @@ import { api } from "../api.js";
 import { useSimulations } from "../context/SimulationsContext.jsx";
 import Breadcrumbs from "./Breadcrumbs.jsx";
 import EditableTable from "./EditableTable.jsx";
+import TagChip from "./TagChip.jsx";
+import { pickTagColor } from "../utils/tags.js";
 
 export default function ElectionSettingsPage() {
   const { electionId } = useParams();
@@ -17,8 +19,21 @@ export default function ElectionSettingsPage() {
   const [draft, setDraft] = useState({ name: "", party: "" });
   const [candidateError, setCandidateError] = useState("");
   const [hypothesisError, setHypothesisError] = useState("");
+  const [tags, setTags] = useState([]);
+  const [tagDraft, setTagDraft] = useState({ name: "", color: "" });
+  const [tagError, setTagError] = useState("");
 
   useEffect(() => setName(election?.name || ""), [election]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.listElectionTags(electionId).then((data) => {
+      if (!cancelled) setTags(data);
+    }).catch(() => {
+      if (!cancelled) setTags([]);
+    });
+    return () => { cancelled = true; };
+  }, [electionId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,6 +107,43 @@ export default function ElectionSettingsPage() {
       : `Supprimer « ${candidate.name} » ?`;
     if (!confirm(message)) return;
     setCandidates(await api.deleteElectionCandidate(election.id, candidate.id));
+  }
+
+  const draftTagColor = tagDraft.color || pickTagColor(tags.map((tag) => tag.color));
+
+  async function addTag() {
+    const tagName = tagDraft.name.trim();
+    if (!tagName) return;
+    setTagError("");
+    try {
+      await api.createElectionTag(election.id, { name: tagName, color: draftTagColor });
+      setTags(await api.listElectionTags(election.id));
+      setTagDraft({ name: "", color: "" });
+    } catch (error) {
+      setTagError(error.message);
+    }
+  }
+
+  function handleTagFieldChange(tagId, field, value) {
+    setTags((previous) => previous.map((tag) => (tag.id === tagId ? { ...tag, [field]: value } : tag)));
+  }
+
+  async function saveTag(tagId, payload) {
+    setTagError("");
+    try {
+      setTags(await api.updateElectionTag(election.id, tagId, payload));
+    } catch (error) {
+      setTagError(error.message);
+      setTags(await api.listElectionTags(election.id));
+    }
+  }
+
+  async function handleDeleteTag(tag) {
+    const message = tag.usage_count
+      ? `Supprimer le tag « ${tag.name} » ? Il sera retiré de ${tag.usage_count} hypothèse${tag.usage_count > 1 ? "s" : ""}.`
+      : `Supprimer le tag « ${tag.name} » ?`;
+    if (!confirm(message)) return;
+    setTags(await api.deleteElectionTag(election.id, tag.id));
   }
 
   async function handleCreateHypothesis() {
@@ -192,6 +244,58 @@ export default function ElectionSettingsPage() {
         {candidateError && <p className="form-error">{candidateError}</p>}
       </section>
       <section className="panel election-settings-panel">
+        <h2>Tags des hypothèses</h2>
+        <p className="hint">Ces tags peuvent être associés aux hypothèses pour les retrouver et les filtrer rapidement.</p>
+        <EditableTable
+          columns={[
+            {
+              key: "color",
+              label: "Couleur",
+              cellClassName: "tag-color-cell",
+              render: (tag) => (
+                <input type="color" className="tag-color-input" value={tag.color} aria-label={`Couleur du tag ${tag.name}`}
+                  onChange={(event) => saveTag(tag.id, { color: event.target.value })} />
+              ),
+            },
+            {
+              key: "name",
+              label: "Nom",
+              render: (tag) => (
+                <input type="text" value={tag.name} aria-label={`Nom du tag ${tag.name}`}
+                  className="grid-input"
+                  onChange={(event) => handleTagFieldChange(tag.id, "name", event.target.value)}
+                  onBlur={() => saveTag(tag.id, { name: tag.name })} />
+              ),
+            },
+            { key: "preview", label: "Aperçu", render: (tag) => <TagChip tag={tag} /> },
+            { key: "usage", label: "Usages", render: (tag) => tag.usage_count },
+            {
+              key: "actions",
+              label: "",
+              render: (tag) => (
+                <button type="button" className="danger row-delete" title="Supprimer" onClick={() => handleDeleteTag(tag)}>✕</button>
+              ),
+            },
+          ]}
+          rows={tags}
+          getRowKey={(tag) => tag.id}
+          renderDraftCell={(column) => {
+            if (column.key === "color") return (
+              <input type="color" className="tag-color-input" value={draftTagColor} aria-label="Couleur du nouveau tag"
+                onChange={(event) => setTagDraft((current) => ({ ...current, color: event.target.value }))} />
+            );
+            if (column.key === "name") return (
+              <input className="grid-input" value={tagDraft.name} placeholder="Nom du tag" aria-label="Nom du nouveau tag"
+                onChange={(event) => setTagDraft((current) => ({ ...current, name: event.target.value }))} />
+            );
+            if (column.key === "actions") return <button type="button" onClick={addTag}>Ajouter</button>;
+            return null;
+          }}
+          onEnterLastRow={addTag}
+        />
+        {tagError && <p className="form-error">{tagError}</p>}
+      </section>
+      <section className="panel election-settings-panel">
         <div className="panel-heading-row">
           <h2>Hypothèses premier tour</h2>
           <button type="button" className="btn-ghost" onClick={handleCreateHypothesis}>
@@ -221,6 +325,14 @@ export default function ElectionSettingsPage() {
                         ? `En tête : ${finalists[0].name} (${finalists[0].pct_r1}%) · ${finalists[1].name} (${finalists[1].pct_r1}%)`
                         : "Ajoutez au moins deux candidats pour voir les deux premiers."}
                     </p>
+                    {hypothesis.tag_ids.length > 0 && (
+                      <div className="tag-list">
+                        {hypothesis.tag_ids
+                          .map((id) => tags.find((tag) => tag.id === id))
+                          .filter(Boolean)
+                          .map((tag) => <TagChip key={tag.id} tag={tag} />)}
+                      </div>
+                    )}
                   </div>
                   <button
                     type="button"

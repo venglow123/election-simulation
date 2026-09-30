@@ -32,6 +32,10 @@ export const hypothesisApi = {
       if (name) hypothesis.name = name;
     }
     if ("description" in payload) hypothesis.description = (payload.description || "").trim();
+    if ("tag_ids" in payload) {
+      const validIds = new Set(election.tags.map((tag) => tag.id));
+      hypothesis.tag_ids = [...new Set((payload.tag_ids || []).map(Number))].filter((id) => validIds.has(id));
+    }
     saveState(state);
     return { ...hypothesis, candidates: hypothesis.candidates.map((candidate) => ({ ...candidate })) };
   },
@@ -43,6 +47,7 @@ export const hypothesisApi = {
     const copy = createHypothesisRecord(state, election, {
       name: `${original.name} (copie)`,
       description: original.description,
+      tag_ids: [...original.tag_ids],
     });
     for (const candidate of original.candidates) {
       createHypothesisCandidateRecord(state, election.id, copy, candidate);
