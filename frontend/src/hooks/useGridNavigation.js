@@ -1,5 +1,21 @@
 import { useEffect } from "react";
 
+export function moveGridFocus(target, rowOffset, columnOffset) {
+  const table = target.closest("table");
+  if (!table) return false;
+  const rows = Array.from(table.querySelectorAll("tbody tr")).map((row) =>
+    Array.from(row.querySelectorAll("input.grid-input"))
+  );
+  const rowIndex = rows.findIndex((row) => row.includes(target));
+  if (rowIndex < 0) return false;
+  const columnIndex = rows[rowIndex].indexOf(target);
+  const next = rows[rowIndex + rowOffset]?.[columnIndex + columnOffset];
+  if (!next) return false;
+  next.focus();
+  next.select();
+  return true;
+}
+
 /** Navigation clavier façon tableur (flèches + Entrée) pour les tableaux éditables. */
 export function useGridNavigation(containerRef, { onEnterLastRow } = {}) {
   useEffect(() => {
@@ -46,7 +62,7 @@ export function useGridNavigation(containerRef, { onEnterLastRow } = {}) {
           prevRow[ci].focus();
           prevRow[ci].select();
         }
-      } else if (key === "ArrowRight" && target.selectionStart === target.value.length) {
+      } else if (key === "ArrowRight" && target.selectionEnd === target.value.length) {
         if (rows[ri][ci + 1]) {
           e.preventDefault();
           rows[ri][ci + 1].focus();

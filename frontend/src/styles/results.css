@@ -1,0 +1,160 @@
+/* ---------- Avertissements & résultats ---------- */
+
+.warnings {
+  border-color: #f2c94c;
+  background: #fffbea;
+  margin-bottom: 20px;
+}
+.warnings ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.results-panel .results-table {
+  margin-bottom: 10px;
+}
+.results-table .winner {
+  background: #eaf7ea;
+  font-weight: 600;
+}
+
+.winner-banner {
+  font-size: 1.1rem;
+}
+
+/* ---------- Tableaux type "grille" (auto-sauvegarde + navigation clavier) ---------- */
+
+.grid-table tbody tr:hover {
+  background: #fafbfc;
+}
+
+.grid-table input.grid-input {
+  border: 1px solid transparent;
+  background: transparent;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.grid-table input.grid-input:hover {
+  border-color: var(--border);
+}
+
+.grid-table input.grid-input:focus {
+  border-color: var(--accent);
+  background: white;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.new-row td {
+  background: #fbfbfc;
+}
+.new-row input.grid-input::placeholder {
+  color: #a3aab5;
+  font-style: italic;
+}
+
+.data-table tfoot td {
+  font-weight: 600;
+  background: #f7f8fa;
+  border-top: 2px solid var(--border);
+}
+
+.total-cell.total-ok {
+  color: #16a34a;
+}
+.total-cell.total-warn {
+  color: var(--danger);
+}
+
+.abstention-auto {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  background: #f7f8fa;
+}
+
+.abstention-auto.cell-negative {
+  color: var(--danger);
+  font-weight: 600;
+  background: var(--danger-soft);
+}
+
+.abstention-row td {
+  font-style: italic;
+  color: var(--text-muted);
+}
+.abstention-row td.candidate-name-cell {
+  font-style: normal;
+}
+.candidate-name-cell {
+  color: var(--text);
+}
+
+.row-delete {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.row-delete:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: #f7f8fa;
+  font-size: 0.78rem;
+  font-family: inherit;
+}
+
+#sankey svg,
+.sankey-panel svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+@media (max-width: 700px) {
+  .main-area {
+    padding: 20px 16px 40px;
+  }
+
+  .scenario-title-row {
+    flex-direction: column;
+  }
+
+  .scenario-duplicate-form {
+    width: 100%;
+    padding-top: 0;
+  }
+
+  .scenario-duplicate-form button {
+    flex: 1;
+  }
+
+  .detail-overlay {
+    padding: 10px;
+  }
+
+  .detail-dialog-header,
+  .share-dialog-body,
+  .import-dialog-body {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .import-confirmation {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+}
+

@@ -1,0 +1,28 @@
+:root {
+  --primary: #111827;
+  --accent: #3b82f6;
+  --accent-dark: #2563eb;
+  --danger: #e15759;
+  --danger-soft: #fdecea;
+  --border: #e2e6ec;
+  --bg: #f4f6f9;
+  --text: #1f2937;
+  --text-muted: #6b7280;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+h1,
+h2 {
+  margin-top: 0;
+  color: #111827;
+}

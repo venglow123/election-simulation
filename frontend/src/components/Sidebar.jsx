@@ -1,32 +1,37 @@
-import { useState } from "react";
-import { NavLink, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { NavLink, useMatch, useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { useSimulations } from "../context/SimulationsContext.jsx";
-import ImportScenarioModal from "./ImportScenarioModal.jsx";
+import SidebarSection from "./SidebarSection.jsx";
+import WorkspaceSelector from "./WorkspaceSelector.jsx";
 
 export default function Sidebar() {
-  const { simulations, refresh } = useSimulations();
-  const { id } = useParams();
+  const { simulations, refresh, selectElection } = useSimulations();
+  const electionWildcardMatch = useMatch("/elections/:electionId/*");
+  const electionExactMatch = useMatch("/elections/:electionId");
+  const electionMatch = electionWildcardMatch || electionExactMatch;
+  const simulationMatch = useMatch("/elections/:electionId/simulations/:simulationId");
+  const electionId = Number(electionMatch?.params.electionId) || null;
+  const simulationId = simulationMatch?.params.simulationId;
   const navigate = useNavigate();
-  const [newName, setNewName] = useState("");
   const [draggedId, setDraggedId] = useState(null);
-  const [isImportOpen, setIsImportOpen] = useState(false);
 
-  async function handleCreate(e) {
-    e.preventDefault();
-    const name = newName.trim();
-    if (!name) return;
-    const sim = await api.createSimulation(name);
-    setNewName("");
+  useEffect(() => {
+    if (electionId) selectElection(electionId).catch(() => navigate("/", { replace: true }));
+  }, [electionId, selectElection, navigate]);
+
+  async function handleCreate() {
+    if (!electionId) return;
+    const sim = await api.createSimulation(electionId, "Nouveau scénario");
     await refresh();
-    navigate(`/simulations/${sim.id}`);
+    navigate(`/elections/${electionId}/simulations/${sim.id}`, { state: { focusTitle: true } });
   }
 
   async function handleDelete(simId, name) {
     if (!confirm(`Supprimer « ${name} » ?`)) return;
     await api.deleteSimulation(simId);
     await refresh();
-    if (String(simId) === id) navigate("/");
+    if (String(simId) === simulationId) navigate(`/elections/${electionId}`);
   }
 
   async function handleDrop(targetId) {
@@ -40,42 +45,36 @@ export default function Sidebar() {
     order.splice(fromIndex, 1);
     order.splice(toIndex, 0, draggedId);
     setDraggedId(null);
-    await api.reorderSimulations(order);
+    await api.reorderSimulations(electionId, order);
     await refresh();
   }
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-brand">
-        <span className="sidebar-brand-icon">🗳️</span>
-        <div>
-          <div className="sidebar-brand-name">Simulateur d'élections</div>
-          <div className="sidebar-brand-tag">Scrutin uninominal à 2 tours</div>
-        </div>
-      </div>
+      <WorkspaceSelector selectedElectionId={electionId} />
 
-      <form className="sidebar-new-form" onSubmit={handleCreate}>
-        <input
-          type="text"
-          placeholder="Nouveau scénario…"
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-        />
-        <button type="submit" title="Créer un scénario">
-          +
-        </button>
-      </form>
-
-      <button type="button" className="sidebar-import-button" onClick={() => setIsImportOpen(true)}>
-        ↓ Importer un scénario
-      </button>
-
-      <nav className="sim-tabs">
-        {simulations.length === 0 && <p className="sim-tabs-empty">Aucun scénario pour l'instant.</p>}
-        {simulations.map((sim) => (
+      <SidebarSection
+        title="Scénarios"
+        items={simulations}
+        getItemKey={(sim) => sim.id}
+        emptyMessage="Aucun scénario pour l'instant."
+        listClassName="sim-tabs"
+        emptyClassName="sim-tabs-empty"
+        actions={
+          <button
+            type="button"
+            className="sidebar-icon-button"
+            data-tooltip="Nouveau scénario"
+            aria-label="Nouveau scénario"
+            onClick={handleCreate}
+            disabled={!electionId}
+          >
+            +
+          </button>
+        }
+        renderItem={(sim) => (
           <div
-            key={sim.id}
-            className={`sim-tab ${String(sim.id) === id ? "active" : ""} ${
+            className={`sim-tab ${String(sim.id) === simulationId ? "active" : ""} ${
               draggedId === sim.id ? "dragging" : ""
             }`}
             draggable
@@ -86,10 +85,10 @@ export default function Sidebar() {
             <span className="sim-tab-handle" title="Glisser pour réordonner">
               ⠿
             </span>
-            <NavLink to={`/simulations/${sim.id}`} className="sim-tab-link">
+            <NavLink to={`/elections/${electionId}/simulations/${sim.id}`} className="sim-tab-link">
               <span className="sim-tab-name">{sim.name}</span>
-              <span className="sim-tab-meta">
-                {sim.candidates_count} candidat{sim.candidates_count !== 1 ? "s" : ""}
+              <span className="sim-tab-meta" title={`${sim.candidates_count} candidat${sim.candidates_count !== 1 ? "s" : ""}`}>
+                {sim.candidates_count}
               </span>
             </NavLink>
             <div className="sim-tab-delete">
@@ -98,18 +97,11 @@ export default function Sidebar() {
               </button>
             </div>
           </div>
-        ))}
-      </nav>
-      {isImportOpen && (
-        <ImportScenarioModal
-          onClose={() => setIsImportOpen(false)}
-          onImported={async (simulation) => {
-            await refresh();
-            setIsImportOpen(false);
-            navigate(`/simulations/${simulation.id}`);
-          }}
-        />
-      )}
+        )}
+      />
+      <footer className="sidebar-version" aria-label={`Version ${__APP_VERSION__}`}>
+        v{__APP_VERSION__.replace(/^v/, "")}
+      </footer>
     </aside>
   );
 }

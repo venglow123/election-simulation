@@ -1,0 +1,157 @@
+.workspace-selector {
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.workspace-selector-label {
+  margin-bottom: 7px;
+  color: #9ca3af;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.workspace-selector-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px 34px;
+  gap: 6px;
+}
+
+.workspace-selector-controls select {
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: #1f2937;
+  color: #f9fafb;
+}
+
+.workspace-icon-button {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 1rem;
+}
+
+.workspace-icon-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.workspace-exchange-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.workspace-exchange-button {
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: #e5e7eb;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.workspace-exchange-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.workspace-exchange-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.workspace-create-form,
+.election-name-form,
+.election-candidate-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.workspace-create-form input {
+  flex: 1 1 100%;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+}
+
+.workspace-create-form .btn-ghost {
+  padding: 7px 9px;
+}
+
+.election-settings-page {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.election-settings-header {
+  margin-bottom: 20px;
+}
+
+.election-settings-header h1 {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+.election-settings-panel,
+.election-danger-zone {
+  margin-bottom: 16px;
+}
+
+.election-delete-dialog {
+  width: min(440px, calc(100vw - 32px));
+  border: 1px solid #f3c2c3;
+  border-radius: 8px;
+  background: white;
+  padding: 24px;
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.2);
+}
+
+.election-delete-dialog p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.election-delete-dialog h2 {
+  margin: 6px 0 10px;
+  font-size: 1.2rem;
+}
+
+.election-delete-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 22px;
+}
+
+.election-name-form input,
+.election-candidate-form input {
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.election-name-form input {
+  flex: 1 1 240px;
+}
+
+.election-candidate-form input {
+  flex: 1 1 160px;
+}
+
+.election-settings-panel .hint {
+  margin-top: -6px;
+}
+

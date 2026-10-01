@@ -2,13 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import jsQR from "jsqr";
 import { api } from "../api.js";
-import { decodeScenarioPayload } from "../utils/scenarioExchange.js";
+import { decodeElectionPayload, validateElectionPayload } from "../utils/electionExchange.js";
 
 const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
+const MAX_FILE_BYTES = 4 * 1024 * 1024;
 const MAX_IMAGE_SIDE = 2400;
 
 async function decodeImageFile(file) {
-  if (!file || !file.type.startsWith("image/")) throw new Error("Sélectionnez une image contenant un QR code.");
   if (file.size > MAX_IMAGE_BYTES) throw new Error("Cette image est trop volumineuse (12 Mo maximum).");
 
   const bitmap = await createImageBitmap(file);
@@ -17,7 +17,7 @@ async function decodeImageFile(file) {
       const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
       const detected = await detector.detect(bitmap);
       if (detected[0]?.rawValue) {
-        const payload = decodeScenarioPayload(detected[0].rawValue);
+        const payload = decodeElectionPayload(detected[0].rawValue);
         bitmap.close();
         return payload;
       }
@@ -58,14 +58,33 @@ async function decodeImageFile(file) {
       }
       code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "attemptBoth" });
     }
-    if (code) return decodeScenarioPayload(code.data);
+    if (code) return decodeElectionPayload(code.data);
   }
   throw new Error("Aucun QR code lisible n'a été trouvé dans cette image.");
 }
 
-export default function ImportScenarioModal({ onClose, onImported }) {
+async function decodeJsonFile(file) {
+  if (file.size > MAX_FILE_BYTES) throw new Error("Ce fichier est trop volumineux (4 Mo maximum).");
+  let parsed;
+  try {
+    parsed = JSON.parse(await file.text());
+  } catch {
+    throw new Error("Ce fichier n'est pas un export d'élection valide.");
+  }
+  return validateElectionPayload(parsed);
+}
+
+async function decodeFile(file) {
+  if (!file) throw new Error("Sélectionnez un fichier d'élection ou une image contenant un QR code.");
+  if (file.type === "application/json" || file.name.toLowerCase().endsWith(".json")) return decodeJsonFile(file);
+  if (file.type.startsWith("image/")) return decodeImageFile(file);
+  throw new Error("Sélectionnez un fichier .json exporté ou une image contenant un QR code.");
+}
+
+export default function ImportElectionModal({ onClose, onImported }) {
   const inputRef = useRef(null);
   const [payload, setPayload] = useState(null);
+  const [link, setLink] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -73,19 +92,11 @@ export default function ImportScenarioModal({ onClose, onImported }) {
     function handleKeyDown(event) {
       if (event.key === "Escape") onClose();
     }
-    async function handlePaste(event) {
-      const imageItem = [...(event.clipboardData?.items || [])].find((item) => item.type.startsWith("image/"));
-      if (!imageItem) return;
-      event.preventDefault();
-      await processFile(imageItem.getAsFile());
-    }
     document.addEventListener("keydown", handleKeyDown);
-    document.addEventListener("paste", handlePaste);
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      document.removeEventListener("paste", handlePaste);
       document.body.style.overflow = previousOverflow;
     };
   }, [onClose]);
@@ -94,29 +105,21 @@ export default function ImportScenarioModal({ onClose, onImported }) {
     setError("");
     setPayload(null);
     try {
-      setPayload(await decodeImageFile(file));
+      setPayload(await decodeFile(file));
     } catch (decodeError) {
-      setError(decodeError.message || "Impossible de lire cette image.");
+      setError(decodeError.message || "Impossible de lire ce fichier.");
     }
   }
 
-  async function handleClipboardButton() {
-    if (!navigator.clipboard?.read) {
-      setError("La lecture directe du presse-papiers n'est pas disponible. Utilisez Ctrl+V dans cette fenêtre.");
-      return;
-    }
+  function processLink(value) {
+    setLink(value);
+    setError("");
+    setPayload(null);
+    if (!value.trim()) return;
     try {
-      const items = await navigator.clipboard.read();
-      for (const item of items) {
-        const imageType = item.types.find((type) => type.startsWith("image/"));
-        if (imageType) {
-          await processFile(await item.getType(imageType));
-          return;
-        }
-      }
-      setError("Aucune image n'est disponible dans le presse-papiers.");
-    } catch {
-      setError("La lecture du presse-papiers a été refusée. Utilisez Ctrl+V dans cette fenêtre.");
+      setPayload(decodeElectionPayload(value));
+    } catch (decodeError) {
+      setError(decodeError.message || "Ce lien est illisible.");
     }
   }
 
@@ -125,44 +128,65 @@ export default function ImportScenarioModal({ onClose, onImported }) {
     setBusy(true);
     setError("");
     try {
-      const imported = await api.importSimulation(payload);
-      await onImported(imported);
+      await onImported(await api.importElection(payload));
     } catch (importError) {
       setError(importError.message || "L'import a échoué.");
       setBusy(false);
     }
   }
 
+  const summary = payload?.election;
+
   return createPortal(
     <div className="detail-overlay" role="presentation" onMouseDown={onClose}>
       <section className="import-dialog" role="dialog" aria-modal="true" aria-labelledby="import-title" onMouseDown={(event) => event.stopPropagation()}>
         <header className="detail-dialog-header">
           <div>
-            <p className="detail-eyebrow">Importer un scénario</p>
-            <h2 id="import-title">Lire un QR code partagé</h2>
+            <p className="detail-eyebrow">Importer une élection</p>
+            <h2 id="import-title">Coller un lien, ou lire un fichier partagé</h2>
           </div>
           <button type="button" className="icon-button" onClick={onClose} aria-label="Fermer l'import">×</button>
         </header>
         <div className="import-dialog-body">
+          <label className="import-link-field">
+            <span>Lien de partage</span>
+            <textarea
+              rows={3}
+              value={link}
+              placeholder="https://…/#/import?content=…"
+              onChange={(event) => processLink(event.target.value)}
+            />
+          </label>
           <div className="import-dropzone">
             <div className="import-dropzone-icon">▣</div>
-            <h3>Déposez une image ou choisissez un fichier</h3>
+            <h3>Ou déposez un fichier d'élection (.json) ou un QR code</h3>
             <p className="hint">Le QR code doit être visible et suffisamment net.</p>
             <div className="import-actions">
-              <button type="button" onClick={() => inputRef.current?.click()}>↑ Choisir une image</button>
-              <button type="button" className="btn-ghost" onClick={handleClipboardButton}>▣ Lire le presse-papiers</button>
+              <button type="button" onClick={() => inputRef.current?.click()}>↑ Choisir un fichier</button>
             </div>
-            <input ref={inputRef} type="file" accept="image/*" hidden onChange={(event) => processFile(event.target.files?.[0])} />
+            <input
+              ref={inputRef}
+              type="file"
+              accept="application/json,.json,image/*"
+              hidden
+              onChange={(event) => processFile(event.target.files?.[0])}
+            />
           </div>
           {error && <p className="import-error" role="alert">{error}</p>}
-          {payload && (
+          {summary && (
             <div className="import-confirmation">
               <div>
-                <p className="detail-eyebrow">QR reconnu</p>
-                <strong>{payload.scenario.name}</strong>
-                <p className="hint">{payload.scenario.candidates.length} candidat{payload.scenario.candidates.length !== 1 ? "s" : ""} · les données seront importées dans un nouveau scénario indépendant.</p>
+                <p className="detail-eyebrow">Élection reconnue</p>
+                <strong>{summary.name}</strong>
+                <p className="hint">
+                  {summary.candidates.length} candidat{summary.candidates.length !== 1 ? "s" : ""} ·{" "}
+                  {summary.hypotheses.length + summary.transfer_hypotheses.length} hypothèse
+                  {summary.hypotheses.length + summary.transfer_hypotheses.length !== 1 ? "s" : ""} ·{" "}
+                  {summary.scenarios.length} scénario{summary.scenarios.length !== 1 ? "s" : ""} · une nouvelle élection
+                  indépendante sera créée.
+                </p>
               </div>
-              <button type="button" onClick={handleImport} disabled={busy}>{busy ? "Import en cours…" : "Importer le scénario"}</button>
+              <button type="button" onClick={handleImport} disabled={busy}>{busy ? "Import en cours…" : "Importer l'élection"}</button>
             </div>
           )}
           <p className="hint import-footnote">Les données sont vérifiées puis enregistrées uniquement dans ce navigateur.</p>

@@ -3,10 +3,19 @@ const timers = new Map();
 
 export function debounceByKey(key, fn, delay) {
   const existing = timers.get(key);
-  if (existing) clearTimeout(existing);
+  if (existing) clearTimeout(existing.timer);
   const timer = setTimeout(() => {
     timers.delete(key);
     fn();
   }, delay);
-  timers.set(key, timer);
+  timers.set(key, { timer, fn });
+}
+
+export async function flushDebouncedByPrefix(prefix) {
+  const pending = [...timers.entries()].filter(([key]) => key.startsWith(prefix));
+  for (const [key, entry] of pending) {
+    clearTimeout(entry.timer);
+    timers.delete(key);
+  }
+  await Promise.all(pending.map(([, entry]) => entry.fn()));
 }

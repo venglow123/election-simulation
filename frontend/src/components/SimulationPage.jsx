@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api.js";
 import { useSimulations } from "../context/SimulationsContext.jsx";
 import { debounceByKey } from "../utils/debounceByKey.js";
+import { buildPartyIndex, computeTransferBaseline, describeTransferCondition } from "../utils/transferHypothesis.js";
 import ScenarioHeader from "./ScenarioHeader.jsx";
 import SettingsPanel from "./SettingsPanel.jsx";
 import CandidatesTable from "./CandidatesTable.jsx";
@@ -10,28 +11,53 @@ import TransfersTable from "./TransfersTable.jsx";
 import ResultsPanel from "./ResultsPanel.jsx";
 import SankeyDiagram from "./SankeyDiagram.jsx";
 import SankeyDetailModal from "./SankeyDetailModal.jsx";
-import ShareScenarioModal from "./ShareScenarioModal.jsx";
+import FirstRoundHypothesisModal from "./FirstRoundHypothesisModal.jsx";
+import TransferHypothesisModal from "./TransferHypothesisModal.jsx";
 import WarningsPanel from "./WarningsPanel.jsx";
 
 const SAVE_DELAY = 400;
 
+function loadTransferHypothesis(electionId, data) {
+  return data.r2_hypothesis_id == null
+    ? Promise.resolve(null)
+    : api.getElectionTransferHypothesis(electionId, data.r2_hypothesis_id);
+}
+
 export default function SimulationPage() {
-  const { id } = useParams();
+  const { electionId: routeElectionId, simulationId, id: legacyId } = useParams();
+  const id = simulationId || legacyId;
+  const electionId = Number(routeElectionId);
   const navigate = useNavigate();
+  const location = useLocation();
   const { refresh: refreshSidebar } = useSimulations();
   const [sim, setSim] = useState(null);
+  const [candidateOptions, setCandidateOptions] = useState([]);
   const [notFound, setNotFound] = useState(false);
   const [isSankeyDetailOpen, setIsSankeyDetailOpen] = useState(false);
-  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isFirstRoundHypothesisOpen, setIsFirstRoundHypothesisOpen] = useState(false);
+  const [firstRoundHypothesis, setFirstRoundHypothesis] = useState(null);
+  const [firstRoundError, setFirstRoundError] = useState("");
+  const [isTransferHypothesisOpen, setIsTransferHypothesisOpen] = useState(false);
+  const [transferHypothesis, setTransferHypothesis] = useState(null);
+  const [transferError, setTransferError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
     setSim(null);
+    setFirstRoundHypothesis(null);
+    setTransferHypothesis(null);
     setNotFound(false);
-    api
-      .getSimulation(id)
-      .then((data) => {
+    Promise.all([api.getSimulation(electionId, id), api.listElectionCandidates(electionId)])
+      .then(async ([data, options]) => {
+        let hypothesis = null;
+        if (data.r1_hypothesis_id != null) {
+          hypothesis = await api.getElectionHypothesis(electionId, data.r1_hypothesis_id);
+        }
+        const r2Hypothesis = await loadTransferHypothesis(electionId, data);
         if (!cancelled) setSim(data);
+        if (!cancelled) setCandidateOptions(options);
+        if (!cancelled) setFirstRoundHypothesis(hypothesis);
+        if (!cancelled) setTransferHypothesis(r2Hypothesis);
       })
       .catch(() => {
         if (!cancelled) setNotFound(true);
@@ -39,9 +65,45 @@ export default function SimulationPage() {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [electionId, id]);
+
+  useEffect(() => {
+    async function refreshFromStorage(event) {
+      if (event.key !== "election-simulation:v2") return;
+      try {
+        const [data, options] = await Promise.all([
+          api.getSimulation(electionId, id),
+          api.listElectionCandidates(electionId),
+        ]);
+        const hypothesis = data.r1_hypothesis_id == null
+          ? null
+          : await api.getElectionHypothesis(electionId, data.r1_hypothesis_id);
+        const r2Hypothesis = await loadTransferHypothesis(electionId, data);
+        setSim(data);
+        setCandidateOptions(options);
+        setFirstRoundHypothesis(hypothesis);
+        setTransferHypothesis(r2Hypothesis);
+      } catch {
+      }
+    }
+    window.addEventListener("storage", refreshFromStorage);
+    return () => window.removeEventListener("storage", refreshFromStorage);
+  }, [electionId, id]);
 
   const applyState = useCallback((data) => setSim(data), []);
+  const closeFirstRoundHypothesisModal = useCallback(() => setIsFirstRoundHypothesisOpen(false), []);
+  const closeTransferHypothesisModal = useCallback(() => setIsTransferHypothesisOpen(false), []);
+
+  const transferBaseline = useMemo(() => (
+    sim && transferHypothesis && sim.has_finalists
+      ? computeTransferBaseline(transferHypothesis, {
+        finalistA: sim.finalist_a.name,
+        finalistB: sim.finalist_b.name,
+        candidates: sim.candidates,
+        partyByName: buildPartyIndex(candidateOptions),
+      })
+      : null
+  ), [sim, transferHypothesis, candidateOptions]);
 
   const saveMetaField = useCallback(
     (field, value) => {
@@ -77,10 +139,13 @@ export default function SimulationPage() {
           : prev
       );
       debounceByKey(`candidate:${candidateId}:${field}`, () => {
-        api.updateCandidate(id, candidateId, { [field]: value }).then(applyState);
+        api.updateCandidate(id, candidateId, { [field]: value }).then(async (data) => {
+          applyState(data);
+          if (field === "name") setCandidateOptions(await api.listElectionCandidates(electionId));
+        });
       }, SAVE_DELAY);
     },
-    [id, applyState]
+    [id, electionId, applyState]
   );
 
   const saveTransferField = useCallback(
@@ -112,15 +177,21 @@ export default function SimulationPage() {
     [id, applyState]
   );
 
+  // Clear the one-shot navigation flag so a reload or back navigation doesn't refocus the title.
+  const clearFocusTitleFlag = useCallback(() => {
+    navigate(location.pathname, { replace: true, state: null });
+  }, [navigate, location.pathname]);
+
   async function handleDuplicate() {
     const copy = await api.duplicateSimulation(id);
     await refreshSidebar();
-    navigate(`/simulations/${copy.id}`);
+    navigate(`/elections/${electionId}/simulations/${copy.id}`, { state: { focusTitle: true } });
   }
 
   async function handleCreateCandidate(payload) {
     const data = await api.addCandidate(id, payload);
     applyState(data);
+    setCandidateOptions(await api.listElectionCandidates(electionId));
     refreshSidebar();
     return data;
   }
@@ -129,6 +200,88 @@ export default function SimulationPage() {
     const data = await api.deleteCandidate(id, candidateId);
     applyState(data);
     refreshSidebar();
+  }
+
+  async function handleSelectFirstRoundHypothesis(hypothesisId) {
+    const updated = await api.setSimulationFirstRoundHypothesis(electionId, id, hypothesisId);
+    setSim(updated);
+    setFirstRoundError("");
+    setFirstRoundHypothesis(hypothesisId == null
+      ? null
+      : await api.getElectionHypothesis(electionId, hypothesisId));
+    setCandidateOptions(await api.listElectionCandidates(electionId));
+    setIsFirstRoundHypothesisOpen(false);
+  }
+
+  async function handleResetFirstRoundHypothesis() {
+    try {
+      const updated = await api.resetSimulationFirstRoundHypothesis(electionId, id);
+      setSim(updated);
+      if (updated.r1_hypothesis_id != null) {
+        setFirstRoundHypothesis(await api.getElectionHypothesis(electionId, updated.r1_hypothesis_id));
+      }
+      setFirstRoundError("");
+    } catch (error) {
+      setFirstRoundError(error.message);
+    }
+  }
+
+  async function handleSaveCurrentAsHypothesis() {
+    try {
+      const { hypothesis } = await api.saveSimulationAsFirstRoundHypothesis(electionId, id, sim.candidates);
+      navigate(`/elections/${electionId}/hypotheses/${hypothesis.id}`, {
+        state: {
+          focusTitle: true,
+          returnTo: {
+            label: sim.name || "Scénario",
+            to: `/elections/${electionId}/simulations/${id}`,
+          },
+        },
+      });
+    } catch (error) {
+      setFirstRoundError(error.message);
+    }
+  }
+
+  async function handleSelectTransferHypothesis(hypothesisId) {
+    const updated = await api.setSimulationTransferHypothesis(electionId, id, hypothesisId);
+    setSim(updated);
+    setTransferError("");
+    setTransferHypothesis(await loadTransferHypothesis(electionId, updated));
+    setIsTransferHypothesisOpen(false);
+  }
+
+  async function handleResetTransferHypothesis() {
+    try {
+      const updated = await api.resetSimulationTransferHypothesis(electionId, id);
+      setSim(updated);
+      setTransferHypothesis(await loadTransferHypothesis(electionId, updated));
+      setTransferError("");
+    } catch (error) {
+      setTransferError(error.message);
+    }
+  }
+
+  function openTransferHypothesisEditor(hypothesisId) {
+    navigate(`/elections/${electionId}/transfer-hypotheses/${hypothesisId}`, {
+      state: {
+        returnTo: { label: sim.name || "Scénario", to: `/elections/${electionId}/simulations/${id}` },
+      },
+    });
+  }
+
+  async function handleSaveCurrentAsTransferHypothesis() {
+    try {
+      const { hypothesis } = await api.saveSimulationAsTransferHypothesis(electionId, id);
+      navigate(`/elections/${electionId}/transfer-hypotheses/${hypothesis.id}`, {
+        state: {
+          focusTitle: true,
+          returnTo: { label: sim.name || "Scénario", to: `/elections/${electionId}/simulations/${id}` },
+        },
+      });
+    } catch (error) {
+      setTransferError(error.message);
+    }
   }
 
   if (notFound) return <p className="empty">Scénario introuvable.</p>;
@@ -140,7 +293,8 @@ export default function SimulationPage() {
         simulation={sim}
         onFieldChange={saveMetaField}
         onDuplicate={handleDuplicate}
-        onShare={() => setIsShareOpen(true)}
+        autoFocusTitle={Boolean(location.state?.focusTitle) && String(sim.id) === String(id)}
+        onTitleFocused={clearFocusTitleFlag}
       />
       <WarningsPanel warnings={sim.warnings} />
       <div className="content-grid">
@@ -148,15 +302,59 @@ export default function SimulationPage() {
           <SettingsPanel simulation={sim} onFieldChange={saveSettingsField} />
           <CandidatesTable
             simulation={sim}
+            candidateOptions={candidateOptions}
+            baselineCandidates={firstRoundHypothesis?.candidates}
             onFieldChange={saveCandidateField}
             onCreate={handleCreateCandidate}
             onDelete={handleDeleteCandidate}
+            headerActions={(
+              <>
+                <button type="button" className="btn-ghost" onClick={() => setIsFirstRoundHypothesisOpen(true)}>
+                  {firstRoundHypothesis ? `Hypothèse : ${firstRoundHypothesis.name}` : "Hypothèse : Custom"}
+                </button>
+                {firstRoundHypothesis ? (
+                  <button type="button" className="btn-ghost" onClick={handleResetFirstRoundHypothesis}>
+                    Réinitialiser
+                  </button>
+                ) : (
+                  <button type="button" className="btn-ghost" onClick={handleSaveCurrentAsHypothesis}>
+                    Enregistrer comme hypothèse
+                  </button>
+                )}
+              </>
+            )}
           />
+          {firstRoundError && <p className="form-error">{firstRoundError}</p>}
           <TransfersTable
             simulation={sim}
             onFieldChange={saveTransferField}
             onAbstentionFieldChange={saveAbstentionTransferField}
+            baseline={transferBaseline}
+            onEditHypothesis={transferHypothesis ? () => openTransferHypothesisEditor(transferHypothesis.id) : undefined}
+            notice={transferHypothesis && sim.has_finalists && !transferBaseline && (
+              <p className="transfer-uncovered-banner" role="status">
+                L'hypothèse « {transferHypothesis.name} » est définie pour le duel {describeTransferCondition(transferHypothesis)},
+                qui ne correspond plus aux finalistes du scénario. Choisissez une autre hypothèse ou passez en Custom.
+              </p>
+            )}
+            headerActions={(
+              <>
+                <button type="button" className="btn-ghost" onClick={() => setIsTransferHypothesisOpen(true)}>
+                  {transferHypothesis ? `Hypothèse : ${transferHypothesis.name}` : "Hypothèse : Custom"}
+                </button>
+                {transferHypothesis ? (
+                  <button type="button" className="btn-ghost" onClick={handleResetTransferHypothesis} disabled={!transferBaseline}>
+                    Réinitialiser
+                  </button>
+                ) : (
+                  <button type="button" className="btn-ghost" onClick={handleSaveCurrentAsTransferHypothesis}>
+                    Enregistrer comme hypothèse
+                  </button>
+                )}
+              </>
+            )}
           />
+          {transferError && <p className="form-error">{transferError}</p>}
         </section>
         <section className="col col-right">
           <div className="panel results-panel">
@@ -177,7 +375,24 @@ export default function SimulationPage() {
         </section>
       </div>
       {isSankeyDetailOpen && <SankeyDetailModal data={sim.sankey} onClose={() => setIsSankeyDetailOpen(false)} />}
-      {isShareOpen && <ShareScenarioModal simulation={sim} onClose={() => setIsShareOpen(false)} />}
+      {isFirstRoundHypothesisOpen && (
+        <FirstRoundHypothesisModal
+          electionId={electionId}
+          selectedHypothesisId={sim.r1_hypothesis_id}
+          onSelect={handleSelectFirstRoundHypothesis}
+          onClose={closeFirstRoundHypothesisModal}
+        />
+      )}
+      {isTransferHypothesisOpen && (
+        <TransferHypothesisModal
+          electionId={electionId}
+          simulation={sim}
+          candidateOptions={candidateOptions}
+          selectedHypothesisId={sim.r2_hypothesis_id}
+          onSelect={handleSelectTransferHypothesis}
+          onClose={closeTransferHypothesisModal}
+        />
+      )}
     </>
   );
 }
