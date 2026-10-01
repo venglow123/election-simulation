@@ -107,6 +107,33 @@
   margin-bottom: 16px;
 }
 
+.election-delete-dialog {
+  width: min(440px, calc(100vw - 32px));
+  border: 1px solid #f3c2c3;
+  border-radius: 8px;
+  background: white;
+  padding: 24px;
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.2);
+}
+
+.election-delete-dialog p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.election-delete-dialog h2 {
+  margin: 6px 0 10px;
+  font-size: 1.2rem;
+}
+
+.election-delete-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 22px;
+}
+
 .election-name-form input,
 .election-candidate-form input {
   min-width: 0;
