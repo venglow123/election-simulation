@@ -17,7 +17,7 @@ sur GitHub Pages.
 
 > Trade-offs : les scénarios ne sont pas synchronisés entre navigateurs ou
 > appareils, et sont perdus si l'utilisateur vide les données du site. Utiliser
-> le partage par QR code pour transférer un scénario.
+> le partage d'élection (lien, QR code ou fichier) pour les transférer.
 
 ## Fonctionnalités
 
@@ -37,10 +37,11 @@ sur GitHub Pages.
 - Diagramme de Sankey (SVG, sans dépendance externe) pour visualiser les flux
   de voix du 1er vers le 2e tour, y compris les abstentionnistes qui se
   remobilisent au 2e tour
-- Export d'un scénario en image PNG carrée contenant uniquement le code de
-  partage
-- Import d'un scénario depuis une image contenant un QR code, par fichier ou
-  presse-papiers, avec validation côté navigateur
+- Partage d'une élection entière (candidats, tags, hypothèses de 1er tour et de
+  report, scénarios) via un lien, un QR code (petites élections) ou un fichier
+  `.json`
+- Import d'une élection depuis un lien, un fichier exporté ou une image
+  contenant un QR code, avec validation côté navigateur
 
 ## Fonctionnalités à venir
 
@@ -142,13 +143,13 @@ ou « Corriger le calcul de l'abstention au second tour », et un de ces labels 
 4. Depuis la liste des simulations, dupliquer une simulation permet de créer
    rapidement une variante (autre hypothèse de reports de voix, autre niveau
    d'abstention, etc.).
-5. Pour partager un scénario, cliquer sur **Partager** dans son en-tête :
-  copier le lien (`https://<baseUrl>/#/import?content=...`) ou télécharger
-  le QR code, qui contient ce même lien.
-6. Le destinataire ouvre le lien (ou scanne le QR code) puis confirme
-  l'import. Il est aussi possible, depuis la barre latérale, de cliquer sur
-  **Importer un scénario** et de fournir l'image du QR code (fichier ou
-  presse-papiers).
+5. Pour partager une élection, cliquer sur **Partager l'élection** sous la
+  liste déroulante des élections dans la barre latérale : copier le lien
+  (`https://<baseUrl>/#/import?content=...`), télécharger le QR code (quand
+  l'élection est assez compacte) ou le fichier `.json`.
+6. Le destinataire ouvre le lien (ou utilise **Importer** dans la barre
+  latérale en collant le lien, en fournissant le fichier ou l'image du QR
+  code) puis confirme l'import : une nouvelle élection indépendante est créée.
 
 Des avertissements s'affichent si la somme des pourcentages du 1er tour ou
 d'une ligne de la matrice de reports ne fait pas 100 %, mais cela n'empêche
@@ -163,9 +164,9 @@ frontend/
     api.js                     # Façade publique stable des opérations locales
     api/storage.js             # Persistance localStorage, migration v1 vers v2
     api/model.js               # Helpers de création, recherche et synchronisation
-    api/elections.js           # Élections et référentiel de candidats
+    api/elections.js           # Élections, référentiel de candidats, export/import
     api/hypotheses.js          # Hypothèses et candidats du premier tour
-    api/simulations.js         # Scénarios, reports de voix et import
+    api/simulations.js         # Scénarios et reports de voix
     styles.css                 # Point d'entrée ordonné des feuilles CSS
     styles/                    # Base, layout, contrôles, résultats et vues métier
     context/SimulationsContext.jsx  # Élections et scénarios actifs partagés
@@ -173,7 +174,7 @@ frontend/
     components/EditableTable.jsx # Enveloppe configurable partagée par les tableaux éditables
     utils/simulationEngine.js  # Calcul du 2e tour + données du Sankey + sérialisation
     utils/debounceByKey.js     # Auto-sauvegarde différée par champ (sans bouton "Enregistrer")
-    utils/scenarioExchange.js  # Contrat versionné, compression et validation du QR
+    utils/electionExchange.js  # Contrat versionné, compression et validation du partage d'élection
     components/                # Sidebar, modales partage/import, tableaux, résultats, Sankey (SVG)
   vite.config.js    # Dev server + build statique (base relative)
 Dockerfile          # Multi-stage : build Node du frontend, puis nginx statique

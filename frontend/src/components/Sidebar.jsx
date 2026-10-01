@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { NavLink, useMatch, useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { useSimulations } from "../context/SimulationsContext.jsx";
-import ImportScenarioModal from "./ImportScenarioModal.jsx";
 import SidebarSection from "./SidebarSection.jsx";
 import WorkspaceSelector from "./WorkspaceSelector.jsx";
 
@@ -16,7 +15,6 @@ export default function Sidebar() {
   const simulationId = simulationMatch?.params.simulationId;
   const navigate = useNavigate();
   const [draggedId, setDraggedId] = useState(null);
-  const [isImportOpen, setIsImportOpen] = useState(false);
 
   useEffect(() => {
     if (electionId) selectElection(electionId).catch(() => navigate("/", { replace: true }));
@@ -63,32 +61,16 @@ export default function Sidebar() {
         listClassName="sim-tabs"
         emptyClassName="sim-tabs-empty"
         actions={
-          <>
-            <button
-              type="button"
-              className="sidebar-icon-button"
-              data-tooltip="Nouveau scénario"
-              aria-label="Nouveau scénario"
-              onClick={handleCreate}
-              disabled={!electionId}
-            >
-              +
-            </button>
-            <button
-              type="button"
-              className="sidebar-icon-button"
-              data-tooltip="Importer un scénario"
-              aria-label="Importer un scénario"
-              onClick={() => setIsImportOpen(true)}
-              disabled={!electionId}
-            >
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M12 3v12" />
-                <path d="m7 10 5 5 5-5" />
-                <path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" />
-              </svg>
-            </button>
-          </>
+          <button
+            type="button"
+            className="sidebar-icon-button"
+            data-tooltip="Nouveau scénario"
+            aria-label="Nouveau scénario"
+            onClick={handleCreate}
+            disabled={!electionId}
+          >
+            +
+          </button>
         }
         renderItem={(sim) => (
           <div
@@ -117,17 +99,6 @@ export default function Sidebar() {
           </div>
         )}
       />
-      {isImportOpen && (
-        <ImportScenarioModal
-          electionId={electionId}
-          onClose={() => setIsImportOpen(false)}
-          onImported={async (simulation) => {
-            await refresh();
-            setIsImportOpen(false);
-            navigate(`/elections/${electionId}/simulations/${simulation.id}`, { state: { focusTitle: true } });
-          }}
-        />
-      )}
       <footer className="sidebar-version" aria-label={`Version ${__APP_VERSION__}`}>
         v{__APP_VERSION__.replace(/^v/, "")}
       </footer>

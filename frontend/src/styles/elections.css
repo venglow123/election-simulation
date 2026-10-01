@@ -40,6 +40,31 @@
   cursor: not-allowed;
 }
 
+.workspace-exchange-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.workspace-exchange-button {
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: #e5e7eb;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.workspace-exchange-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.workspace-exchange-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .workspace-create-form,
 .election-name-form,
 .election-candidate-form {

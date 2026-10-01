@@ -4,7 +4,6 @@ export default function ScenarioHeader({
   simulation,
   onFieldChange,
   onDuplicate,
-  onShare,
   autoFocusTitle,
   onTitleFocused,
   titlePlaceholder = "Nom du scénario",
@@ -40,11 +39,6 @@ export default function ScenarioHeader({
           />
         </div>
         <div className="scenario-duplicate-form">
-          {onShare && (
-            <button type="button" className="btn-ghost" onClick={onShare}>
-              ↗ Partager
-            </button>
-          )}
           <button type="button" className="btn-ghost" onClick={onDuplicate}>
             ⧉ Dupliquer
           </button>

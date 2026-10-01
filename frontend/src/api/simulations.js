@@ -1,7 +1,6 @@
 import { loadState, saveState } from "./storage.js";
 import { toFloat, toInt, findSimulation, findCandidate, findHypothesis, findElection, ensureDefaultElection, registerElectionCandidate, createSimulationRecord, createCandidateRecord, createHypothesisRecord, createHypothesisCandidateRecord, applyHypothesisToSimulation, detachHypothesisFromSimulation, getSimulationPayload, mutate, findTransferHypothesis, applyTransferHypothesisToSimulation, computeSimulationTransferBaseline, createTransferHypothesisRecord, createTransferRowRecord, serializeTransferHypothesis } from "./model.js";
 import { alignTransferColumns, getFinalists, serializeSimulation } from "../utils/simulationEngine.js";
-import { validateScenarioPayload } from "../utils/scenarioExchange.js";
 
 export const simulationApi = {
   listSimulations: async (electionId) =>
@@ -140,29 +139,6 @@ export const simulationApi = {
     const state = loadState();
     const election = electionId == null ? ensureDefaultElection(state) : findElection(state, electionId);
     const simulation = createSimulationRecord(state, election.id, { name: (name || "").trim() || "Nouvelle simulation" });
-    saveState(state);
-    return { ...serializeSimulation(simulation), election_id: election.id };
-  },
-
-  importSimulation: async (electionId, payload) => {
-    if (payload === undefined) {
-      payload = electionId;
-      electionId = null;
-    }
-    const { scenario } = validateScenarioPayload(payload);
-    const now = new Date();
-    const dateSuffix = ` (${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")})`;
-    const state = loadState();
-    const election = electionId == null ? ensureDefaultElection(state) : findElection(state, electionId);
-    const simulation = createSimulationRecord(state, election.id, {
-      name: `${scenario.name.slice(0, 200 - dateSuffix.length)}${dateSuffix}`,
-      description: scenario.description,
-      total_inscrits: scenario.total_inscrits,
-      abstention_r1: scenario.abstention_r1,
-      abstention_to_a: scenario.abstention_to_a,
-      abstention_to_b: scenario.abstention_to_b,
-    });
-    for (const candidate of scenario.candidates) createCandidateRecord(state, simulation, candidate);
     saveState(state);
     return { ...serializeSimulation(simulation), election_id: election.id };
   },

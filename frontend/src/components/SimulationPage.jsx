@@ -11,7 +11,6 @@ import TransfersTable from "./TransfersTable.jsx";
 import ResultsPanel from "./ResultsPanel.jsx";
 import SankeyDiagram from "./SankeyDiagram.jsx";
 import SankeyDetailModal from "./SankeyDetailModal.jsx";
-import ShareScenarioModal from "./ShareScenarioModal.jsx";
 import FirstRoundHypothesisModal from "./FirstRoundHypothesisModal.jsx";
 import TransferHypothesisModal from "./TransferHypothesisModal.jsx";
 import WarningsPanel from "./WarningsPanel.jsx";
@@ -35,7 +34,6 @@ export default function SimulationPage() {
   const [candidateOptions, setCandidateOptions] = useState([]);
   const [notFound, setNotFound] = useState(false);
   const [isSankeyDetailOpen, setIsSankeyDetailOpen] = useState(false);
-  const [isShareOpen, setIsShareOpen] = useState(false);
   const [isFirstRoundHypothesisOpen, setIsFirstRoundHypothesisOpen] = useState(false);
   const [firstRoundHypothesis, setFirstRoundHypothesis] = useState(null);
   const [firstRoundError, setFirstRoundError] = useState("");
@@ -295,7 +293,6 @@ export default function SimulationPage() {
         simulation={sim}
         onFieldChange={saveMetaField}
         onDuplicate={handleDuplicate}
-        onShare={() => setIsShareOpen(true)}
         autoFocusTitle={Boolean(location.state?.focusTitle) && String(sim.id) === String(id)}
         onTitleFocused={clearFocusTitleFlag}
       />
@@ -378,7 +375,6 @@ export default function SimulationPage() {
         </section>
       </div>
       {isSankeyDetailOpen && <SankeyDetailModal data={sim.sankey} onClose={() => setIsSankeyDetailOpen(false)} />}
-      {isShareOpen && <ShareScenarioModal simulation={sim} onClose={() => setIsShareOpen(false)} />}
       {isFirstRoundHypothesisOpen && (
         <FirstRoundHypothesisModal
           electionId={electionId}

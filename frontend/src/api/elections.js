@@ -1,6 +1,17 @@
 import { loadState, saveState } from "./storage.js";
-import { findElection, registerElectionCandidate, withTransferHypothesisSync } from "./model.js";
+import {
+  findElection,
+  registerElectionCandidate,
+  withTransferHypothesisSync,
+  createSimulationRecord,
+  createCandidateRecord,
+  createHypothesisRecord,
+  createHypothesisCandidateRecord,
+  createTransferHypothesisRecord,
+  createTransferRowRecord,
+} from "./model.js";
 import { isValidTagColor, normalizeTagName, pickTagColor } from "../utils/tags.js";
+import { buildElectionPayload, validateElectionPayload } from "../utils/electionExchange.js";
 
 function serializeTags(election) {
   return [...election.tags]
@@ -65,6 +76,107 @@ export const electionApi = {
     election.name = name;
     saveState(state);
     return { ...election, scenarios_count: state.simulations.filter((simulation) => simulation.election_id === election.id).length };
+  },
+
+  exportElection: async (id) => {
+    const state = loadState();
+    const election = findElection(state, id);
+    return buildElectionPayload(election, state.simulations.filter((simulation) => simulation.election_id === election.id));
+  },
+
+  importElection: async (payload) => {
+    const { election: source } = validateElectionPayload(payload);
+    const state = loadState();
+    const now = new Date();
+    const suffix = ` (${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")})`;
+    const election = {
+      id: state.nextElectionId++,
+      name: `${source.name.slice(0, 200 - suffix.length)}${suffix}`,
+      position: state.elections.length + 1,
+      candidates: [],
+      hypotheses: [],
+      transfer_hypotheses: [],
+      tags: [],
+    };
+    state.elections.push(election);
+
+    const tagIds = source.tags.map((tag) => {
+      const record = { id: state.nextTagId++, name: tag.name, color: tag.color };
+      election.tags.push(record);
+      return record.id;
+    });
+    for (const candidate of source.candidates) {
+      registerElectionCandidate(state, election.id, candidate.name, candidate.party);
+    }
+
+    // Les références entre entités sont transmises par index : on les retraduit en identifiants locaux.
+    const hypotheses = source.hypotheses.map((hypothesis) => {
+      const record = createHypothesisRecord(state, election, {
+        name: hypothesis.name,
+        description: hypothesis.description,
+        tag_ids: hypothesis.tags.map((index) => tagIds[index]),
+      });
+      for (const candidate of hypothesis.candidates) {
+        createHypothesisCandidateRecord(state, election.id, record, candidate);
+      }
+      return record;
+    });
+    const transferHypotheses = source.transfer_hypotheses.map((hypothesis) => {
+      const record = createTransferHypothesisRecord(state, election, {
+        name: hypothesis.name,
+        description: hypothesis.description,
+        tag_ids: hypothesis.tags.map((index) => tagIds[index]),
+        finalist_a: hypothesis.finalist_a,
+        finalist_b: hypothesis.finalist_b,
+        abstention_to_a: hypothesis.abstention_to_a,
+        abstention_to_b: hypothesis.abstention_to_b,
+      });
+      for (const row of hypothesis.candidate_transfers) {
+        createTransferRowRecord(state, record, "candidate", { ...row, key: row.name });
+      }
+      for (const row of hypothesis.party_transfers) {
+        createTransferRowRecord(state, record, "party", { ...row, key: row.party });
+      }
+      return record;
+    });
+
+    for (const scenario of source.scenarios) {
+      const hypothesis = scenario.r1_hypothesis == null ? null : hypotheses[scenario.r1_hypothesis];
+      const simulation = createSimulationRecord(state, election.id, {
+        name: scenario.name,
+        description: scenario.description,
+        total_inscrits: scenario.total_inscrits,
+        abstention_r1: scenario.abstention_r1,
+        abstention_to_a: scenario.abstention_to_a,
+        abstention_to_b: scenario.abstention_to_b,
+        r1_hypothesis_id: hypothesis?.id ?? null,
+        r1_excluded_hypothesis_candidate_ids: hypothesis
+          ? scenario.r1_excluded.map((index) => hypothesis.candidates[index].id)
+          : [],
+        r2_hypothesis_id: scenario.r2_hypothesis == null ? null : transferHypotheses[scenario.r2_hypothesis].id,
+      });
+      for (const candidate of scenario.candidates) {
+        createCandidateRecord(state, simulation, {
+          name: candidate.name,
+          pct_r1: candidate.pct_r1,
+          pct_to_a: candidate.pct_to_a,
+          pct_to_b: candidate.pct_to_b,
+          hypothesis_candidate_id: hypothesis && candidate.hypothesis_candidate != null
+            ? hypothesis.candidates[candidate.hypothesis_candidate].id
+            : null,
+          r1_name_override: candidate.r1_name_override,
+          r1_pct_override: candidate.r1_pct_override,
+        });
+      }
+    }
+
+    saveState(state);
+    return {
+      id: election.id,
+      name: election.name,
+      position: election.position,
+      scenarios_count: source.scenarios.length,
+    };
   },
 
   deleteElection: async (id) => {

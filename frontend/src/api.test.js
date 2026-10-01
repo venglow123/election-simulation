@@ -369,3 +369,56 @@ test("les hypothèses de report préremplissent le 2e tour et suivent leurs modi
   assert.equal(scenario.r2_hypothesis_id, null);
   assert.deepEqual(byName(scenario).David, [50, 25]);
 });
+
+test("une élection exportée est réimportée comme copie indépendante et complète", async () => {
+  resetStorage();
+  const source = await api.createElection("Présidentielle");
+  await api.createElectionCandidate(source.id, { name: "Alice", party: "Parti A" });
+  await api.createElectionCandidate(source.id, { name: "Benoît", party: "Parti B" });
+  const tag = await api.createElectionTag(source.id, { name: "Sondage" });
+
+  const hypothesis = await api.createElectionHypothesis(source.id);
+  await api.updateElectionHypothesis(source.id, hypothesis.id, { name: "Haute", tag_ids: [tag.id] });
+  await api.addHypothesisCandidate(source.id, hypothesis.id, { name: "Alice", pct_r1: 40 });
+  await api.addHypothesisCandidate(source.id, hypothesis.id, { name: "Benoît", pct_r1: 35 });
+
+  const transfer = await api.createElectionTransferHypothesis(source.id);
+  await api.updateElectionTransferHypothesis(source.id, transfer.id, {
+    name: "Report standard", finalist_a: "Alice", finalist_b: "Benoît", abstention_to_a: 5, abstention_to_b: 15,
+  });
+
+  const simulation = await api.createSimulation(source.id, "Scénario central");
+  await api.setSimulationFirstRoundHypothesis(source.id, simulation.id, hypothesis.id);
+  await api.setSimulationTransferHypothesis(source.id, simulation.id, transfer.id);
+
+  const imported = await api.importElection(await api.exportElection(source.id));
+  assert.notEqual(imported.id, source.id);
+  assert.match(imported.name, /^Présidentielle \(\d{6}\)$/);
+
+  const [importedHypothesis] = await api.listElectionHypotheses(imported.id);
+  const [importedTransfer] = await api.listElectionTransferHypotheses(imported.id);
+  const [importedTag] = await api.listElectionTags(imported.id);
+  const [importedSummary] = await api.listSimulations(imported.id);
+  const importedScenario = await api.getSimulation(imported.id, importedSummary.id);
+
+  assert.equal(importedHypothesis.name, "Haute");
+  assert.notEqual(importedHypothesis.id, hypothesis.id);
+  assert.deepEqual(importedHypothesis.tag_ids, [importedTag.id]);
+  assert.equal(importedTransfer.finalist_a, "Alice");
+  assert.equal(importedScenario.r1_hypothesis_id, importedHypothesis.id);
+  assert.equal(importedScenario.r2_hypothesis_id, importedTransfer.id);
+  assert.deepEqual(
+    importedScenario.candidates.map((candidate) => candidate.hypothesis_candidate_id),
+    importedHypothesis.candidates.map((candidate) => candidate.id)
+  );
+  assert.deepEqual(
+    (await api.listElectionCandidates(imported.id)).map((candidate) => [candidate.name, candidate.party]),
+    [["Alice", "Parti A"], ["Benoît", "Parti B"]]
+  );
+
+  // La copie ne doit plus bouger quand l'originale évolue.
+  const sourceHypothesis = await api.getElectionHypothesis(source.id, hypothesis.id);
+  await api.updateHypothesisCandidate(source.id, hypothesis.id, sourceHypothesis.candidates[0].id, { pct_r1: 99 });
+  const stillTheSame = await api.getElectionHypothesis(imported.id, importedHypothesis.id);
+  assert.equal(stillTheSame.candidates[0].pct_r1, 40);
+});

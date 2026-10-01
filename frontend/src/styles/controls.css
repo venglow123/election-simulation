@@ -306,6 +306,27 @@ button:disabled:hover {
   text-align: center;
 }
 
+.import-link-field {
+  display: block;
+  margin-bottom: 16px;
+}
+
+.import-link-field span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.import-link-field textarea {
+  width: 100%;
+  resize: vertical;
+  font-family: monospace;
+  font-size: 0.8rem;
+}
+
 .import-dropzone-icon {
   color: var(--accent);
   font-size: 2rem;
