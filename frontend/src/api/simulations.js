@@ -1,6 +1,6 @@
 import { loadState, saveState } from "./storage.js";
-import { toFloat, toInt, findSimulation, findCandidate, findHypothesis, findElection, ensureDefaultElection, registerElectionCandidate, createSimulationRecord, createCandidateRecord, createHypothesisRecord, createHypothesisCandidateRecord, applyHypothesisToSimulation, detachHypothesisFromSimulation, getSimulationPayload, mutate } from "./model.js";
-import { serializeSimulation } from "../utils/simulationEngine.js";
+import { toFloat, toInt, findSimulation, findCandidate, findHypothesis, findElection, ensureDefaultElection, registerElectionCandidate, createSimulationRecord, createCandidateRecord, createHypothesisRecord, createHypothesisCandidateRecord, applyHypothesisToSimulation, detachHypothesisFromSimulation, getSimulationPayload, mutate, findTransferHypothesis, applyTransferHypothesisToSimulation, computeSimulationTransferBaseline, createTransferHypothesisRecord, createTransferRowRecord, serializeTransferHypothesis } from "./model.js";
+import { alignTransferColumns, getFinalists, serializeSimulation } from "../utils/simulationEngine.js";
 import { validateScenarioPayload } from "../utils/scenarioExchange.js";
 
 export const simulationApi = {
@@ -75,6 +75,59 @@ export const simulationApi = {
     saveState(state);
     return {
       hypothesis: { ...hypothesis, candidates: hypothesis.candidates.map((candidate) => ({ ...candidate })) },
+      simulation: getSimulationPayload(simulation),
+    };
+  },
+
+  setSimulationTransferHypothesis: async (electionId, simulationId, hypothesisId) => {
+    const state = loadState();
+    const election = findElection(state, electionId);
+    const simulation = findSimulation(state, simulationId);
+    if (simulation.election_id !== election.id) throw new Error("Scénario introuvable.");
+    if (hypothesisId == null) {
+      simulation.r2_hypothesis_id = null;
+    } else {
+      applyTransferHypothesisToSimulation(election, simulation, findTransferHypothesis(election, hypothesisId));
+    }
+    saveState(state);
+    return getSimulationPayload(simulation);
+  },
+
+  resetSimulationTransferHypothesis: async (electionId, simulationId) => {
+    const state = loadState();
+    const election = findElection(state, electionId);
+    const simulation = findSimulation(state, simulationId);
+    if (simulation.election_id !== election.id || simulation.r2_hypothesis_id == null) {
+      throw new Error("Aucune hypothèse de report n'est sélectionnée pour ce scénario.");
+    }
+    applyTransferHypothesisToSimulation(election, simulation, findTransferHypothesis(election, simulation.r2_hypothesis_id));
+    saveState(state);
+    return getSimulationPayload(simulation);
+  },
+
+  saveSimulationAsTransferHypothesis: async (electionId, simulationId) => {
+    const state = loadState();
+    const election = findElection(state, electionId);
+    const simulation = findSimulation(state, simulationId);
+    if (simulation.election_id !== election.id) throw new Error("Scénario introuvable.");
+    const finalists = getFinalists(simulation);
+    if (finalists.length < 2) throw new Error("Le scénario doit compter au moins 2 candidats.");
+    const hypothesis = createTransferHypothesisRecord(state, election, {
+      finalist_a: finalists[0].name,
+      finalist_b: finalists[1].name,
+      abstention_to_a: simulation.abstention_to_a,
+      abstention_to_b: simulation.abstention_to_b,
+    });
+    const seen = new Set();
+    for (const candidate of simulation.candidates) {
+      if (seen.has(candidate.name)) continue;
+      seen.add(candidate.name);
+      createTransferRowRecord(state, hypothesis, "candidate", { key: candidate.name, ...candidate.transfer });
+    }
+    simulation.r2_hypothesis_id = hypothesis.id;
+    saveState(state);
+    return {
+      hypothesis: serializeTransferHypothesis(hypothesis),
       simulation: getSimulationPayload(simulation),
     };
   },
@@ -158,6 +211,7 @@ export const simulationApi = {
       abstention_to_b: original.abstention_to_b,
       r1_hypothesis_id: original.r1_hypothesis_id,
       r1_excluded_hypothesis_candidate_ids: [...original.r1_excluded_hypothesis_candidate_ids],
+      r2_hypothesis_id: original.r2_hypothesis_id,
     });
     for (const c of original.candidates) {
       createCandidateRecord(state, copy, {
@@ -186,6 +240,11 @@ export const simulationApi = {
       if (!name) throw new Error("Le nom du candidat est obligatoire.");
       registerElectionCandidate(state, simulation.election_id, name);
       const candidate = createCandidateRecord(state, simulation, { name, pct_r1: toFloat(data.pct_r1, 0) });
+      alignTransferColumns(simulation);
+      const election = findElection(state, simulation.election_id);
+      const hypothesis = election.transfer_hypotheses.find((item) => item.id === simulation.r2_hypothesis_id);
+      const expected = hypothesis && computeSimulationTransferBaseline(election, simulation, hypothesis)?.rows.get(candidate.id);
+      if (expected) candidate.transfer = { pct_to_a: expected.pct_to_a, pct_to_b: expected.pct_to_b };
       return { new_candidate_id: candidate.id };
     }),
 

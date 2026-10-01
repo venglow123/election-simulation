@@ -1,4 +1,5 @@
 import { isValidTagColor, TAG_PALETTE } from "../utils/tags.js";
+import { alignTransferColumns } from "../utils/simulationEngine.js";
 
 const STORAGE_KEY = "election-simulation:v2";
 const LEGACY_STORAGE_KEY = "election-simulation:v1";
@@ -13,6 +14,8 @@ function emptyState() {
     nextHypothesisId: 1,
     nextHypothesisCandidateId: 1,
     nextTagId: 1,
+    nextTransferHypothesisId: 1,
+    nextTransferRowId: 1,
     nextSimulationId: 1,
     nextCandidateId: 1,
     elections: [],
@@ -22,6 +25,19 @@ function emptyState() {
 
 function maxId(records) {
   return records.reduce((max, record) => Math.max(max, Number(record.id) || 0), 0);
+}
+
+function toPct(value) {
+  return Number.isFinite(Number(value)) ? Math.max(Number(value), 0) : 0;
+}
+
+function normalizeTransferRows(rows, keyField) {
+  return Array.isArray(rows) ? rows.map((row, index) => ({
+    id: Number(row.id) || index + 1,
+    [keyField]: String(row[keyField] || ""),
+    pct_to_a: toPct(row.pct_to_a),
+    pct_to_b: toPct(row.pct_to_b),
+  })) : [];
 }
 
 function normalizeElection(election, index) {
@@ -60,6 +76,22 @@ function normalizeElection(election, index) {
         pct_r1: Number.isFinite(Number(candidate.pct_r1)) ? Number(candidate.pct_r1) : 0,
       })) : [],
     })) : [],
+    transfer_hypotheses: Array.isArray(election.transfer_hypotheses) ? election.transfer_hypotheses.map((hypothesis, hypothesisIndex) => ({
+      ...hypothesis,
+      id: Number(hypothesis.id) || hypothesisIndex + 1,
+      name: String(hypothesis.name || "Nouvelle hypothèse de report"),
+      description: String(hypothesis.description || ""),
+      position: Number.isFinite(Number(hypothesis.position)) ? Number(hypothesis.position) : hypothesisIndex + 1,
+      tag_ids: Array.isArray(hypothesis.tag_ids)
+        ? [...new Set(hypothesis.tag_ids.map(Number))].filter((id) => tagIds.has(id))
+        : [],
+      finalist_a: String(hypothesis.finalist_a || ""),
+      finalist_b: String(hypothesis.finalist_b || ""),
+      abstention_to_a: toPct(hypothesis.abstention_to_a),
+      abstention_to_b: toPct(hypothesis.abstention_to_b),
+      candidate_transfers: normalizeTransferRows(hypothesis.candidate_transfers, "name"),
+      party_transfers: normalizeTransferRows(hypothesis.party_transfers, "party"),
+    })) : [],
   };
 }
 
@@ -80,6 +112,12 @@ function normalizeState(raw) {
       r1_excluded_hypothesis_candidate_ids: Array.isArray(simulation.r1_excluded_hypothesis_candidate_ids)
         ? simulation.r1_excluded_hypothesis_candidate_ids.map(Number)
         : [],
+      r2_hypothesis_id: simulation.r2_hypothesis_id != null && Number.isFinite(Number(simulation.r2_hypothesis_id))
+        ? Number(simulation.r2_hypothesis_id)
+        : null,
+      r2_columns: Array.isArray(simulation.r2_columns) && simulation.r2_columns.length === 2
+        ? simulation.r2_columns.map(Number)
+        : undefined,
       candidates: Array.isArray(simulation.candidates) ? simulation.candidates.map((candidate) => ({
         ...candidate,
         hypothesis_candidate_id: candidate.hypothesis_candidate_id != null && Number.isFinite(Number(candidate.hypothesis_candidate_id))
@@ -100,6 +138,7 @@ function normalizeState(raw) {
       position: state.elections.length + 1,
       candidates: [],
       hypotheses: [],
+      transfer_hypotheses: [],
       tags: [],
     };
     const candidateNames = new Set();
@@ -130,6 +169,16 @@ function normalizeState(raw) {
   state.nextTagId = Math.max(
     Number(state.nextTagId) || 1,
     ...state.elections.map((election) => maxId(election.tags) + 1)
+  );
+  state.nextTransferHypothesisId = Math.max(
+    Number(state.nextTransferHypothesisId) || 1,
+    ...state.elections.map((election) => maxId(election.transfer_hypotheses) + 1)
+  );
+  state.nextTransferRowId = Math.max(
+    Number(state.nextTransferRowId) || 1,
+    ...state.elections.flatMap((election) => election.transfer_hypotheses.map((hypothesis) => (
+      Math.max(maxId(hypothesis.candidate_transfers), maxId(hypothesis.party_transfers)) + 1
+    )))
   );
   state.nextSimulationId = Math.max(Number(state.nextSimulationId) || 1, maxId(state.simulations) + 1);
   state.nextCandidateId = Math.max(
@@ -163,6 +212,7 @@ export function loadState() {
 }
 
 export function saveState(state) {
+  for (const simulation of state.simulations) alignTransferColumns(simulation);
   memoryFallback = state;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));

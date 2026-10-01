@@ -10,6 +10,7 @@ globalThis.window = {
 };
 
 const { api } = await import("./api.js");
+const { transferConditionMatches } = await import("./utils/transferHypothesis.js");
 
 function resetStorage() {
   values.clear();
@@ -237,4 +238,134 @@ test("les opérations de simulation conservent leur contrat via la façade API",
   assert.deepEqual((await api.listSimulations(election.id)).map((item) => item.id), [copy.id, simulation.id]);
   await api.deleteSimulation(simulation.id);
   assert.deepEqual((await api.listSimulations(election.id)).map((item) => item.id), [copy.id]);
+});
+
+test("les reports suivent leur finaliste quand l'ordre du 1er tour s'inverse", async () => {
+  resetStorage();
+  const election = await api.createElection("Municipales");
+  const simulation = await api.createSimulation(election.id, "Inversion");
+  const ids = {};
+  for (const [name, pct_r1] of [["Alice", 40], ["Benoît", 35], ["Chloé", 25]]) {
+    ids[name] = (await api.addCandidate(simulation.id, { name, pct_r1 })).new_candidate_id;
+  }
+  await api.updateTransfer(simulation.id, ids.Chloé, { pct_to_a: 70, pct_to_b: 10 });
+  await api.updateAbstentionTransfer(simulation.id, { pct_to_a: 5, pct_to_b: 15 });
+
+  let scenario = await api.updateCandidate(simulation.id, ids.Benoît, { pct_r1: 45 });
+  const chloe = (data) => data.candidates.find((c) => c.id === ids.Chloé).transfer;
+  assert.equal(scenario.finalist_a.name, "Benoît");
+  assert.deepEqual([chloe(scenario).pct_to_a, chloe(scenario).pct_to_b], [10, 70]);
+  assert.deepEqual([scenario.abstention_to_a, scenario.abstention_to_b], [15, 5]);
+
+  // Alice passe 3e : Benoît reste en colonne A, aucune inversion.
+  scenario = await api.updateCandidate(simulation.id, ids.Alice, { pct_r1: 10 });
+  assert.equal(scenario.finalist_b.name, "Chloé");
+  assert.deepEqual([scenario.abstention_to_a, scenario.abstention_to_b], [15, 5]);
+
+  // Le nouvel ajouté prend la tête : Benoît passe en colonne B et ses reports le suivent.
+  scenario = await api.addCandidate(simulation.id, { name: "David", pct_r1: 60 });
+  assert.equal(scenario.finalist_a.name, "David");
+  assert.deepEqual([scenario.abstention_to_a, scenario.abstention_to_b], [5, 15]);
+});
+
+test("une hypothèse de report est proposée et appliquée à l'identique quel que soit l'ordre des finalistes", async () => {
+  resetStorage();
+  const election = await api.createElection("Municipales");
+  const hypothesis = await api.createElectionTransferHypothesis(election.id);
+  await api.updateElectionTransferHypothesis(election.id, hypothesis.id, {
+    finalist_a: "Alice", finalist_b: "Benoît", abstention_to_a: 5, abstention_to_b: 15,
+  });
+  await api.addTransferHypothesisRow(election.id, hypothesis.id, "candidate", { key: "Chloé", pct_to_a: 70, pct_to_b: 10 });
+  const stored = await api.getElectionTransferHypothesis(election.id, hypothesis.id);
+
+  for (const [order, expectedA] of [[[["Alice", 40], ["Benoît", 35]], "Alice"], [[["Benoît", 40], ["Alice", 35]], "Benoît"]]) {
+    const simulation = await api.createSimulation(election.id, `Ordre ${expectedA}`);
+    for (const [name, pct_r1] of [...order, ["Chloé", 25]]) await api.addCandidate(simulation.id, { name, pct_r1 });
+    const before = await api.getSimulation(election.id, simulation.id);
+    assert.equal(before.finalist_a.name, expectedA);
+    assert.equal(transferConditionMatches(stored, [before.finalist_a.name, before.finalist_b.name]), true);
+
+    const scenario = await api.setSimulationTransferHypothesis(election.id, simulation.id, hypothesis.id);
+    const toFinalist = (transfer, name) => (scenario.finalist_a.name === name ? transfer.pct_to_a : transfer.pct_to_b);
+    const chloe = scenario.candidates.find((c) => c.name === "Chloé").transfer;
+    const abstention = { pct_to_a: scenario.abstention_to_a, pct_to_b: scenario.abstention_to_b };
+    assert.equal(toFinalist(chloe, "Alice"), 70);
+    assert.equal(toFinalist(chloe, "Benoît"), 10);
+    assert.equal(toFinalist(abstention, "Alice"), 5);
+    assert.equal(toFinalist(abstention, "Benoît"), 15);
+  }
+});
+
+test("les hypothèses de report préremplissent le 2e tour et suivent leurs modifications", async () => {
+  resetStorage();
+  const election = await api.createElection("Municipales");
+  await api.createElectionCandidate(election.id, { name: "Chloé", party: "Verts" });
+  await api.createElectionCandidate(election.id, { name: "David", party: "Verts" });
+  const simulation = await api.createSimulation(election.id, "Duel");
+  for (const [name, pct_r1] of [["Alice", 40], ["Benoît", 35], ["Chloé", 15], ["David", 6], ["Émile", 4]]) {
+    await api.addCandidate(simulation.id, { name, pct_r1 });
+  }
+  const tag = await api.createElectionTag(election.id, { name: "Sondage" });
+
+  const hypothesis = await api.createElectionTransferHypothesis(election.id);
+  await assert.rejects(
+    api.updateElectionTransferHypothesis(election.id, hypothesis.id, { finalist_a: "Alice", finalist_b: "Alice" }),
+    /différents/
+  );
+  let updated = await api.updateElectionTransferHypothesis(election.id, hypothesis.id, {
+    finalist_a: "Benoît",
+    finalist_b: "Alice",
+    abstention_to_a: 4,
+    tag_ids: [tag.id],
+  });
+  assert.deepEqual(updated.candidate_transfers.map((row) => [row.name, row.pct_to_a, row.pct_to_b]), [
+    ["Benoît", 100, 0],
+    ["Alice", 0, 100],
+  ]);
+  updated = await api.addTransferHypothesisRow(election.id, hypothesis.id, "candidate", { key: "Chloé", pct_to_a: 20, pct_to_b: 60 });
+  await assert.rejects(api.addTransferHypothesisRow(election.id, hypothesis.id, "candidate", { key: "chloé" }), /déjà/);
+  updated = await api.addTransferHypothesisRow(election.id, hypothesis.id, "party", { key: "Verts", pct_to_a: 10, pct_to_b: 50 });
+  const partyRowId = updated.party_transfers[0].id;
+  assert.equal((await api.listElectionTags(election.id))[0].usage_count, 1);
+
+  let scenario = await api.setSimulationTransferHypothesis(election.id, simulation.id, hypothesis.id);
+  const byName = (data) => Object.fromEntries(data.candidates.map((c) => [c.name, [c.transfer.pct_to_a, c.transfer.pct_to_b]]));
+  assert.equal(scenario.r2_hypothesis_id, hypothesis.id);
+  // Scénario : A = Alice, B = Benoît ; l'hypothèse est définie dans l'ordre inverse.
+  assert.deepEqual(byName(scenario), {
+    Alice: [100, 0],
+    Benoît: [0, 100],
+    Chloé: [60, 20],
+    David: [50, 10],
+    Émile: [0, 0],
+  });
+  assert.equal(scenario.abstention_to_b, 4);
+
+  const david = scenario.candidates.find((c) => c.name === "David");
+  await api.updateTransfer(simulation.id, david.id, { pct_to_a: 30 });
+  await api.updateTransferHypothesisRow(election.id, hypothesis.id, "party", partyRowId, { pct_to_a: 25 });
+  await api.addTransferHypothesisRow(election.id, hypothesis.id, "candidate", { key: "Émile", pct_to_a: 50, pct_to_b: 0 });
+  scenario = await api.getSimulation(election.id, simulation.id);
+  assert.deepEqual(byName(scenario).David, [30, 10]);
+  assert.deepEqual(byName(scenario).Émile, [0, 50]);
+
+  const withFelix = await api.addCandidate(simulation.id, { name: "Félix", pct_r1: 0 });
+  assert.deepEqual(byName(withFelix).Félix, [0, 0]);
+
+  scenario = await api.resetSimulationTransferHypothesis(election.id, simulation.id);
+  assert.deepEqual(byName(scenario).David, [50, 25]);
+
+  const copy = await api.duplicateElectionTransferHypothesis(election.id, hypothesis.id);
+  assert.equal(copy.party_transfers.length, 1);
+  assert.notEqual(copy.party_transfers[0].id, partyRowId);
+
+  const saved = await api.saveSimulationAsTransferHypothesis(election.id, simulation.id);
+  assert.equal(saved.hypothesis.finalist_a, "Alice");
+  assert.equal(saved.hypothesis.candidate_transfers.length, 6);
+  assert.equal(saved.simulation.r2_hypothesis_id, saved.hypothesis.id);
+
+  await api.deleteElectionTransferHypothesis(election.id, saved.hypothesis.id);
+  scenario = await api.getSimulation(election.id, simulation.id);
+  assert.equal(scenario.r2_hypothesis_id, null);
+  assert.deepEqual(byName(scenario).David, [50, 25]);
 });

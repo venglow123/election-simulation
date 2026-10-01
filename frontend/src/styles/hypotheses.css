@@ -415,6 +415,92 @@
   padding: 12px 24px 4px;
 }
 
+.transfer-condition {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.transfer-condition-field {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.transfer-condition-field select {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  font: inherit;
+  font-weight: 400;
+}
+
+.transfer-condition-versus {
+  padding-bottom: 8px;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.transfer-source {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 400;
+}
+
+.transfer-source-cell {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.transfer-uncovered td {
+  background-color: #fff7e8;
+}
+
+.transfer-uncovered td:first-child {
+  box-shadow: inset 3px 0 0 #d97706;
+}
+
+.transfer-uncovered .transfer-source,
+.transfer-uncovered .transfer-source-cell,
+.transfer-uncovered-count {
+  color: #b45309;
+  font-weight: 600;
+}
+
+.transfer-uncovered-banner {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 1px solid #f5d8a8;
+  border-radius: 6px;
+  background: #fff7e8;
+  color: #7c4a03;
+  font-size: 0.85rem;
+}
+
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #087f8c;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+button.link-button:hover {
+  background: none;
+  color: #075e68;
+}
+
 @media (max-width: 700px) {
   .hypothesis-settings-summary {
     display: none;

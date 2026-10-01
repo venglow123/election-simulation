@@ -6,6 +6,16 @@ import Breadcrumbs from "./Breadcrumbs.jsx";
 import EditableTable from "./EditableTable.jsx";
 import TagChip from "./TagChip.jsx";
 import { pickTagColor } from "../utils/tags.js";
+import { summarizeTransferHypothesis } from "../utils/transferHypothesis.js";
+
+function summarizeFirstRoundHypothesis(hypothesis) {
+  const finalists = [...hypothesis.candidates]
+    .sort((a, b) => Number(b.pct_r1) - Number(a.pct_r1))
+    .slice(0, 2);
+  return finalists.length === 2
+    ? `${finalists[0].name} ${finalists[0].pct_r1}% · ${finalists[1].name} ${finalists[1].pct_r1}%`
+    : "Moins de deux candidats";
+}
 
 export default function ElectionSettingsPage() {
   const { electionId } = useParams();
@@ -19,6 +29,8 @@ export default function ElectionSettingsPage() {
   const [draft, setDraft] = useState({ name: "", party: "" });
   const [candidateError, setCandidateError] = useState("");
   const [hypothesisError, setHypothesisError] = useState("");
+  const [transferHypotheses, setTransferHypotheses] = useState([]);
+  const [transferHypothesisError, setTransferHypothesisError] = useState("");
   const [tags, setTags] = useState([]);
   const [tagDraft, setTagDraft] = useState({ name: "", color: "" });
   const [tagError, setTagError] = useState("");
@@ -51,6 +63,16 @@ export default function ElectionSettingsPage() {
       if (!cancelled) setHypotheses(data);
     }).catch((error) => {
       if (!cancelled) setHypothesisError(error.message);
+    });
+    return () => { cancelled = true; };
+  }, [electionId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.listElectionTransferHypotheses(electionId).then((data) => {
+      if (!cancelled) setTransferHypotheses(data);
+    }).catch((error) => {
+      if (!cancelled) setTransferHypothesisError(error.message);
     });
     return () => { cancelled = true; };
   }, [electionId]);
@@ -165,6 +187,68 @@ export default function ElectionSettingsPage() {
     } catch (error) {
       setHypothesisError(error.message);
     }
+  }
+
+  async function handleCreateTransferHypothesis() {
+    setTransferHypothesisError("");
+    try {
+      const hypothesis = await api.createElectionTransferHypothesis(election.id);
+      navigate(`/elections/${election.id}/transfer-hypotheses/${hypothesis.id}`, { state: { focusTitle: true } });
+    } catch (error) {
+      setTransferHypothesisError(error.message);
+    }
+  }
+
+  async function handleDeleteTransferHypothesis(hypothesis) {
+    if (!confirm(`Supprimer l'hypothèse de report « ${hypothesis.name} » ?`)) return;
+    setTransferHypothesisError("");
+    try {
+      await api.deleteElectionTransferHypothesis(election.id, hypothesis.id);
+      setTransferHypotheses((current) => current.filter((item) => item.id !== hypothesis.id));
+    } catch (error) {
+      setTransferHypothesisError(error.message);
+    }
+  }
+
+  function renderHypothesisList(items, pathSegment, summarize, onDelete) {
+    return (
+      <ul className="hypothesis-settings-list">
+        {items.map((hypothesis) => {
+          const summary = summarize(hypothesis);
+          return (
+            <li key={hypothesis.id} className="hypothesis-settings-row">
+              <NavLink
+                className="hypothesis-settings-link"
+                to={`/elections/${election.id}/${pathSegment}/${hypothesis.id}`}
+                aria-label={`Modifier l'hypothèse ${hypothesis.name}`}
+              >
+                <span className="hypothesis-settings-main">
+                  <span className="hypothesis-settings-name">{hypothesis.name}</span>
+                  {hypothesis.tag_ids.length > 0 && (
+                    <span className="tag-list">
+                    {hypothesis.tag_ids
+                      .map((id) => tags.find((tag) => tag.id === id))
+                      .filter(Boolean)
+                      .map((tag) => <TagChip key={tag.id} tag={tag} />)}
+                    </span>
+                  )}
+                </span>
+                <span className="hypothesis-settings-summary" title={summary}>{summary}</span>
+              </NavLink>
+              <button
+                type="button"
+                className="danger row-delete hypothesis-delete"
+                title={`Supprimer ${hypothesis.name}`}
+                aria-label={`Supprimer l'hypothèse ${hypothesis.name}`}
+                onClick={() => onDelete(hypothesis)}
+              >
+                ✕
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    );
   }
 
   async function handleDelete() {
@@ -305,49 +389,22 @@ export default function ElectionSettingsPage() {
         {hypothesisError && <p className="form-error">{hypothesisError}</p>}
         {hypotheses.length === 0 ? (
           <p className="hint">Aucune hypothèse enregistrée pour cette élection.</p>
-        ) : (
-          <ul className="hypothesis-settings-list">
-            {hypotheses.map((hypothesis) => {
-              const finalists = [...hypothesis.candidates]
-                .sort((a, b) => Number(b.pct_r1) - Number(a.pct_r1))
-                .slice(0, 2);
-              const summary = finalists.length === 2
-                ? `${finalists[0].name} ${finalists[0].pct_r1}% · ${finalists[1].name} ${finalists[1].pct_r1}%`
-                : "Moins de deux candidats";
-              return (
-                <li key={hypothesis.id} className="hypothesis-settings-row">
-                  <NavLink
-                    className="hypothesis-settings-link"
-                    to={`/elections/${election.id}/hypotheses/${hypothesis.id}`}
-                    aria-label={`Modifier l'hypothèse ${hypothesis.name}`}
-                  >
-                    <span className="hypothesis-settings-main">
-                      <span className="hypothesis-settings-name">{hypothesis.name}</span>
-                      {hypothesis.tag_ids.length > 0 && (
-                        <span className="tag-list">
-                        {hypothesis.tag_ids
-                          .map((id) => tags.find((tag) => tag.id === id))
-                          .filter(Boolean)
-                          .map((tag) => <TagChip key={tag.id} tag={tag} />)}
-                        </span>
-                      )}
-                    </span>
-                    <span className="hypothesis-settings-summary" title={summary}>{summary}</span>
-                  </NavLink>
-                  <button
-                    type="button"
-                    className="danger row-delete hypothesis-delete"
-                    title={`Supprimer ${hypothesis.name}`}
-                    aria-label={`Supprimer l'hypothèse ${hypothesis.name}`}
-                    onClick={() => handleDeleteHypothesis(hypothesis)}
-                  >
-                    ✕
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+        ) : renderHypothesisList(hypotheses, "hypotheses", summarizeFirstRoundHypothesis, handleDeleteHypothesis)}
+      </section>
+      <section className="panel election-settings-panel">
+        <div className="panel-heading-row">
+          <h2>Hypothèses de reports de voix</h2>
+          <button type="button" className="btn-ghost" onClick={handleCreateTransferHypothesis}>
+            + Nouvelle hypothèse
+          </button>
+        </div>
+        <p className="hint">
+          Chaque hypothèse s'applique à un duel de second tour et préremplit les reports des scénarios correspondants.
+        </p>
+        {transferHypothesisError && <p className="form-error">{transferHypothesisError}</p>}
+        {transferHypotheses.length === 0 ? (
+          <p className="hint">Aucune hypothèse de report enregistrée pour cette élection.</p>
+        ) : renderHypothesisList(transferHypotheses, "transfer-hypotheses", summarizeTransferHypothesis, handleDeleteTransferHypothesis)}
       </section>
       <section className="panel election-danger-zone">
         <div>

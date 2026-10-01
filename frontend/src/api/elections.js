@@ -1,5 +1,5 @@
 import { loadState, saveState } from "./storage.js";
-import { findElection, registerElectionCandidate } from "./model.js";
+import { findElection, registerElectionCandidate, withTransferHypothesisSync } from "./model.js";
 import { isValidTagColor, normalizeTagName, pickTagColor } from "../utils/tags.js";
 
 function serializeTags(election) {
@@ -7,7 +7,8 @@ function serializeTags(election) {
     .sort((a, b) => a.name.localeCompare(b.name, "fr"))
     .map((tag) => ({
       ...tag,
-      usage_count: election.hypotheses.filter((hypothesis) => hypothesis.tag_ids.includes(tag.id)).length,
+      usage_count: [...election.hypotheses, ...election.transfer_hypotheses]
+        .filter((hypothesis) => hypothesis.tag_ids.includes(tag.id)).length,
     }));
 }
 
@@ -48,6 +49,7 @@ export const electionApi = {
       position: state.elections.length + 1,
       candidates: [],
       hypotheses: [],
+      transfer_hypotheses: [],
       tags: [],
     };
     state.elections.push(election);
@@ -85,6 +87,9 @@ export const electionApi = {
           .reduce((count, simulation) => count + simulation.candidates.filter((item) => item.name === candidate.name).length, 0)
           + election.hypotheses.reduce((count, hypothesis) => (
             count + hypothesis.candidates.filter((item) => item.name === candidate.name).length
+          ), 0)
+          + election.transfer_hypotheses.reduce((count, hypothesis) => (
+            count + hypothesis.candidate_transfers.filter((item) => item.name === candidate.name).length
           ), 0),
       }));
   },
@@ -108,25 +113,35 @@ export const electionApi = {
     const candidate = election.candidates.find((item) => item.id === Number(candidateId));
     if (!candidate) throw new Error("Candidat introuvable.");
     const oldName = candidate.name;
-    if ("name" in payload) {
-      const name = (payload.name || "").trim();
-      if (!name) throw new Error("Le nom du candidat est obligatoire.");
-      if (election.candidates.some((item) => item.id !== candidate.id && item.name === name)) {
-        throw new Error("Ce nom est déjà utilisé par un autre candidat de l'élection.");
-      }
-      candidate.name = name;
-      for (const simulation of state.simulations.filter((item) => item.election_id === election.id)) {
-        for (const scenarioCandidate of simulation.candidates) {
-          if (scenarioCandidate.name === oldName) scenarioCandidate.name = name;
+    // Un changement de parti modifie la résolution des reports par parti des scénarios liés.
+    withTransferHypothesisSync(state, election, () => {
+      if ("name" in payload) {
+        const name = (payload.name || "").trim();
+        if (!name) throw new Error("Le nom du candidat est obligatoire.");
+        if (election.candidates.some((item) => item.id !== candidate.id && item.name === name)) {
+          throw new Error("Ce nom est déjà utilisé par un autre candidat de l'élection.");
+        }
+        candidate.name = name;
+        for (const simulation of state.simulations.filter((item) => item.election_id === election.id)) {
+          for (const scenarioCandidate of simulation.candidates) {
+            if (scenarioCandidate.name === oldName) scenarioCandidate.name = name;
+          }
+        }
+        for (const hypothesis of election.hypotheses) {
+          for (const hypothesisCandidate of hypothesis.candidates) {
+            if (hypothesisCandidate.name === oldName) hypothesisCandidate.name = name;
+          }
+        }
+        for (const hypothesis of election.transfer_hypotheses) {
+          if (hypothesis.finalist_a === oldName) hypothesis.finalist_a = name;
+          if (hypothesis.finalist_b === oldName) hypothesis.finalist_b = name;
+          for (const row of hypothesis.candidate_transfers) {
+            if (row.name === oldName) row.name = name;
+          }
         }
       }
-      for (const hypothesis of election.hypotheses) {
-        for (const hypothesisCandidate of hypothesis.candidates) {
-          if (hypothesisCandidate.name === oldName) hypothesisCandidate.name = name;
-        }
-      }
-    }
-    if ("party" in payload) candidate.party = (payload.party || "").trim();
+      if ("party" in payload) candidate.party = (payload.party || "").trim();
+    });
     saveState(state);
     return electionApi.listElectionCandidates(election.id);
   },
@@ -182,7 +197,7 @@ export const electionApi = {
     const state = loadState();
     const election = findElection(state, electionId);
     election.tags = election.tags.filter((tag) => tag.id !== Number(tagId));
-    for (const hypothesis of election.hypotheses) {
+    for (const hypothesis of [...election.hypotheses, ...election.transfer_hypotheses]) {
       hypothesis.tag_ids = hypothesis.tag_ids.filter((id) => id !== Number(tagId));
     }
     saveState(state);

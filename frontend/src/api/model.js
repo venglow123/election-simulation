@@ -1,4 +1,5 @@
-import { serializeSimulation } from "../utils/simulationEngine.js";
+import { getFinalists, serializeSimulation } from "../utils/simulationEngine.js";
+import { buildPartyIndex, computeTransferBaseline } from "../utils/transferHypothesis.js";
 import { loadState, saveState } from "./storage.js";
 
 export function toFloat(value, fallback = 0) {
@@ -34,6 +35,12 @@ export function findHypothesisCandidate(hypothesis, candidateId) {
   return candidate;
 }
 
+export function findTransferHypothesis(election, hypothesisId) {
+  const hypothesis = election.transfer_hypotheses.find((item) => item.id === Number(hypothesisId));
+  if (!hypothesis) throw new Error("Hypothèse de report introuvable.");
+  return hypothesis;
+}
+
 export function nextPosition(state, electionId) {
   return state.simulations
     .filter((simulation) => simulation.election_id === electionId)
@@ -54,6 +61,7 @@ export function ensureDefaultElection(state) {
       position: 1,
       candidates: [],
       hypotheses: [],
+      transfer_hypotheses: [],
       tags: [],
     });
   }
@@ -89,6 +97,7 @@ export function createSimulationRecord(state, electionId, fields) {
     abstention_to_b: 0,
     r1_hypothesis_id: null,
     r1_excluded_hypothesis_candidate_ids: [],
+    r2_hypothesis_id: null,
     candidates: [],
     ...fields,
   };
@@ -179,6 +188,104 @@ export function detachHypothesisFromSimulation(simulation) {
 
 export function getSimulationPayload(simulation) {
   return { ...serializeSimulation(simulation), election_id: simulation.election_id };
+}
+
+export function createTransferHypothesisRecord(state, election, fields = {}) {
+  const hypothesis = {
+    id: state.nextTransferHypothesisId++,
+    name: "Nouvelle hypothèse de report",
+    description: "",
+    position: election.transfer_hypotheses.reduce((max, item) => Math.max(max, item.position), 0) + 1,
+    tag_ids: [],
+    finalist_a: "",
+    finalist_b: "",
+    abstention_to_a: 0,
+    abstention_to_b: 0,
+    candidate_transfers: [],
+    party_transfers: [],
+    ...fields,
+  };
+  election.transfer_hypotheses.push(hypothesis);
+  return hypothesis;
+}
+
+export const TRANSFER_ROW_KINDS = {
+  candidate: { list: "candidate_transfers", key: "name", label: "candidat" },
+  party: { list: "party_transfers", key: "party", label: "parti" },
+};
+
+export function createTransferRowRecord(state, hypothesis, kind, { key, pct_to_a = 0, pct_to_b = 0 }) {
+  const { list, key: keyField } = TRANSFER_ROW_KINDS[kind];
+  const row = { id: state.nextTransferRowId++, [keyField]: key, pct_to_a, pct_to_b };
+  hypothesis[list].push(row);
+  return row;
+}
+
+export function serializeTransferHypothesis(hypothesis) {
+  return {
+    ...hypothesis,
+    tag_ids: [...hypothesis.tag_ids],
+    candidate_transfers: hypothesis.candidate_transfers.map((row) => ({ ...row })),
+    party_transfers: hypothesis.party_transfers.map((row) => ({ ...row })),
+  };
+}
+
+export function computeSimulationTransferBaseline(election, simulation, hypothesis) {
+  const finalists = getFinalists(simulation);
+  if (finalists.length < 2) return null;
+  return computeTransferBaseline(hypothesis, {
+    finalistA: finalists[0].name,
+    finalistB: finalists[1].name,
+    candidates: simulation.candidates,
+    partyByName: buildPartyIndex(election.candidates),
+  });
+}
+
+export function applyTransferHypothesisToSimulation(election, simulation, hypothesis) {
+  const baseline = computeSimulationTransferBaseline(election, simulation, hypothesis);
+  if (!baseline) throw new Error("Cette hypothèse de report ne correspond pas aux finalistes du scénario.");
+  simulation.abstention_to_a = baseline.abstention.pct_to_a;
+  simulation.abstention_to_b = baseline.abstention.pct_to_b;
+  for (const candidate of simulation.candidates) {
+    const { pct_to_a, pct_to_b } = baseline.rows.get(candidate.id);
+    candidate.transfer = { pct_to_a, pct_to_b };
+  }
+  simulation.r2_hypothesis_id = hypothesis.id;
+}
+
+function sameTransfer(current, expected) {
+  return Number(current.pct_to_a) === expected.pct_to_a && Number(current.pct_to_b) === expected.pct_to_b;
+}
+
+// Propage une modification d'hypothèse aux scénarios liés, sans écraser les lignes personnalisées localement.
+export function withTransferHypothesisSync(state, election, change) {
+  const linked = state.simulations.filter((simulation) => (
+    simulation.election_id === election.id && simulation.r2_hypothesis_id != null
+  ));
+  const baselineOf = (simulation) => {
+    const hypothesis = election.transfer_hypotheses.find((item) => item.id === simulation.r2_hypothesis_id);
+    return hypothesis ? computeSimulationTransferBaseline(election, simulation, hypothesis) : null;
+  };
+  const before = linked.map(baselineOf);
+  const result = change();
+  linked.forEach((simulation, index) => {
+    const previous = before[index];
+    const next = baselineOf(simulation);
+    if (!previous || !next) return;
+    const abstention = { pct_to_a: simulation.abstention_to_a, pct_to_b: simulation.abstention_to_b };
+    if (sameTransfer(abstention, previous.abstention)) {
+      simulation.abstention_to_a = next.abstention.pct_to_a;
+      simulation.abstention_to_b = next.abstention.pct_to_b;
+    }
+    for (const candidate of simulation.candidates) {
+      const old = previous.rows.get(candidate.id);
+      const updated = next.rows.get(candidate.id);
+      if (old && updated && sameTransfer(candidate.transfer, old)) {
+        candidate.transfer = { pct_to_a: updated.pct_to_a, pct_to_b: updated.pct_to_b };
+      }
+    }
+  });
+  return result;
 }
 
 export function syncUpdatedHypothesisCandidate(state, election, hypothesis, sourceCandidate) {
