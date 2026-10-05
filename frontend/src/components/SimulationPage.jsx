@@ -175,7 +175,8 @@ export default function SimulationPage() {
 
   const saveAbstentionTransferField = useCallback(
     (field, value) => {
-      setSim((prev) => (prev ? { ...prev, [field]: value } : prev));
+      const simulationField = field === "pct_to_a" ? "abstention_to_a" : "abstention_to_b";
+      setSim((prev) => (prev ? { ...prev, [simulationField]: value } : prev));
       debounceByKey(`abstention:${field}`, () => {
         api.updateAbstentionTransfer(id, { [field]: value }).then(applyState);
       }, SAVE_DELAY);
