@@ -16,6 +16,79 @@ function resetStorage() {
   values.clear();
 }
 
+test("Custom round tags persist independently and follow duplication and hypothesis creation", async () => {
+  resetStorage();
+
+  const election = await api.createElection("Tags");
+  const otherElection = await api.createElection("Other");
+  const first = await api.createElectionTag(election.id, { name: "First" });
+  const second = await api.createElectionTag(election.id, { name: "Second" });
+  const foreign = await api.createElectionTag(otherElection.id, { name: "Foreign" });
+
+  const simulation = await api.createSimulation(election.id, "Custom");
+  assert.deepEqual(simulation.r1_tag_ids, []);
+  assert.deepEqual(simulation.r2_tag_ids, []);
+
+  // Chaque tour conserve ses tags; les doublons et les tags étrangers sont ignorés.
+  await api.updateSimulation(simulation.id, {
+    r1_tag_ids: [first.id, first.id, foreign.id, 9999],
+    r2_tag_ids: [second.id],
+  });
+
+  const loaded = await api.getSimulation(election.id, simulation.id);
+  assert.deepEqual(loaded.r1_tag_ids, [first.id]);
+  assert.deepEqual(loaded.r2_tag_ids, [second.id]);
+
+  // Modifier une copie ne doit pas modifier les tags du scénario original.
+  const copy = await api.duplicateSimulation(simulation.id);
+  await api.updateSimulation(copy.id, { r1_tag_ids: [] });
+
+  assert.deepEqual((await api.getSimulation(simulation.id)).r1_tag_ids, [first.id]);
+  assert.deepEqual(copy.r2_tag_ids, [second.id]);
+
+  // L'import remappe les tags vers les identifiants de la nouvelle élection.
+  const exported = await api.exportElection(election.id);
+  const imported = await api.importElection(exported);
+  const [importedSummary] = await api.listSimulations(imported.id);
+  const importedSimulation = await api.getSimulation(imported.id, importedSummary.id);
+  const importedTags = await api.listElectionTags(imported.id);
+
+  assert.deepEqual(importedSimulation.r1_tag_ids, [importedTags.find((tag) => tag.name === "First").id]);
+  assert.deepEqual(importedSimulation.r2_tag_ids, [importedTags.find((tag) => tag.name === "Second").id]);
+
+  // Supprimer un tag importé nettoie les références sans toucher à l'original.
+  await api.deleteElectionTag(imported.id, importedSimulation.r1_tag_ids[0]);
+
+  assert.deepEqual((await api.getSimulation(imported.id, importedSummary.id)).r1_tag_ids, []);
+  assert.deepEqual((await api.getSimulation(simulation.id)).r1_tag_ids, [first.id]);
+
+  // Les hypothèses créées héritent des tags Custom de leur tour respectif.
+  await api.addCandidate(simulation.id, { name: "Alice", pct_r1: 60 });
+  await api.addCandidate(simulation.id, { name: "Bob", pct_r1: 40 });
+  const { hypothesis: firstHypothesis } = await api.saveSimulationAsFirstRoundHypothesis(election.id, simulation.id);
+  const { hypothesis: secondHypothesis } = await api.saveSimulationAsTransferHypothesis(election.id, simulation.id);
+
+  assert.deepEqual(firstHypothesis.tag_ids, [first.id]);
+  assert.deepEqual(secondHypothesis.tag_ids, [second.id]);
+
+  // Une section liée ne permet plus de modifier ses tags depuis le scénario.
+  for (const round of ["r1", "r2"]) {
+    await assert.rejects(api.updateSimulation(simulation.id, { [`${round}_tag_ids`]: [] }), /tags/);
+  }
+
+  // Le retour en Custom récupère les tags actuels, même modifiés depuis la liaison.
+  await api.updateElectionHypothesis(election.id, firstHypothesis.id, { tag_ids: [second.id] });
+  await api.updateElectionTransferHypothesis(election.id, secondHypothesis.id, { tag_ids: [first.id] });
+  const detachedFirst = await api.setSimulationFirstRoundHypothesis(election.id, simulation.id, null);
+  const detachedSecond = await api.setSimulationTransferHypothesis(election.id, simulation.id, null);
+
+  assert.deepEqual(detachedFirst.r1_tag_ids, [second.id]);
+  assert.deepEqual(detachedSecond.r2_tag_ids, [first.id]);
+
+  await api.updateSimulation(simulation.id, { r1_tag_ids: [], r2_tag_ids: [] });
+  assert.deepEqual((await api.getSimulation(simulation.id)).r2_tag_ids, []);
+});
+
 test("les scénarios v1 sont migrés sans perdre leur identité ni leurs données", async () => {
   resetStorage();
   const legacy = {
@@ -49,6 +122,8 @@ test("les scénarios v1 sont migrés sans perdre leur identité ni leurs donnée
   assert.equal(legacyRouteSimulation.election_id, election.id);
   assert.equal(simulation.name, "Présidentielle - variante");
   assert.equal(simulation.description, "Données historiques");
+  assert.deepEqual(simulation.r1_tag_ids, []);
+  assert.deepEqual(simulation.r2_tag_ids, []);
   assert.equal(simulation.total_inscrits, 1000);
   assert.deepEqual(simulation.candidates[0].transfer, { pct_to_a: 80, pct_to_b: 10, pct_to_abstention: 10 });
   assert.equal(candidate.name, "Alice");

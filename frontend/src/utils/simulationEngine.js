@@ -176,6 +176,8 @@ export function serializeSimulation(simulation) {
     abstention_to_b: simulation.abstention_to_b,
     r1_hypothesis_id: simulation.r1_hypothesis_id ?? null,
     r2_hypothesis_id: simulation.r2_hypothesis_id ?? null,
+    r1_tag_ids: [...(simulation.r1_tag_ids || [])],
+    r2_tag_ids: [...(simulation.r2_tag_ids || [])],
     abstention_stay_pct: round2(100 - simulation.abstention_to_a - simulation.abstention_to_b),
     candidates: simulation.candidates.map((c) => ({
       id: c.id,

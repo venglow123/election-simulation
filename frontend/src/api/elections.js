@@ -150,6 +150,8 @@ export const electionApi = {
         abstention_to_a: scenario.abstention_to_a,
         abstention_to_b: scenario.abstention_to_b,
         r1_hypothesis_id: hypothesis?.id ?? null,
+        r1_tag_ids: scenario.r1_tags.map((index) => tagIds[index]),
+        r2_tag_ids: scenario.r2_tags.map((index) => tagIds[index]),
         r1_excluded_hypothesis_candidate_ids: hypothesis
           ? scenario.r1_excluded.map((index) => hypothesis.candidates[index].id)
           : [],
@@ -311,6 +313,10 @@ export const electionApi = {
     election.tags = election.tags.filter((tag) => tag.id !== Number(tagId));
     for (const hypothesis of [...election.hypotheses, ...election.transfer_hypotheses]) {
       hypothesis.tag_ids = hypothesis.tag_ids.filter((id) => id !== Number(tagId));
+    }
+    for (const simulation of state.simulations.filter((item) => item.election_id === election.id)) {
+      simulation.r1_tag_ids = simulation.r1_tag_ids.filter((id) => id !== Number(tagId));
+      simulation.r2_tag_ids = simulation.r2_tag_ids.filter((id) => id !== Number(tagId));
     }
     saveState(state);
     return serializeTags(election);
