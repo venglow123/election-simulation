@@ -1,6 +1,7 @@
 import { useState } from "react";
 import CandidateAutocomplete from "./CandidateAutocomplete.jsx";
 import EditableTable from "./EditableTable.jsx";
+import { normalizeCandidateName } from "../utils/candidateNames.js";
 
 export default function CandidatesTable({
   simulation,
@@ -15,11 +16,33 @@ export default function CandidatesTable({
   baselineCandidates,
 }) {
   const [draft, setDraft] = useState({ name: "", pct_r1: "" });
+  const [duplicateName, setDuplicateName] = useState(false);
+  const [duplicateAttempt, setDuplicateAttempt] = useState(0);
+  const [draftError, setDraftError] = useState("");
 
-  function submitDraft() {
-    const name = draft.name.trim();
+  function showDuplicateFeedback() {
+    setDuplicateName(true);
+    setDuplicateAttempt((attempt) => attempt + 1);
+  }
+
+  async function submitDraft(candidateName = draft.name) {
+    const name = String(candidateName).trim();
     if (!name) return;
-    onCreate({ name, pct_r1: draft.pct_r1 || 0 }).then(() => setDraft({ name: "", pct_r1: "" }));
+    const normalizedName = normalizeCandidateName(name);
+    if (simulation.candidates.some((candidate) => normalizeCandidateName(candidate.name) === normalizedName)) {
+      showDuplicateFeedback();
+      return;
+    }
+    try {
+      await onCreate({ name, pct_r1: draft.pct_r1 || 0 });
+      setDraft({ name: "", pct_r1: "" });
+      setDuplicateName(false);
+      setDraftError("");
+    } catch (error) {
+      const duplicate = /existe déjà|déjà présent/i.test(error.message);
+      if (duplicate) showDuplicateFeedback();
+      else setDraftError(error.message);
+    }
   }
 
   const totalPct = simulation.candidates.reduce(
@@ -49,6 +72,9 @@ export default function CandidatesTable({
         <CandidateAutocomplete
           value={candidate.name}
           options={candidateOptions}
+          excludeNames={simulation.candidates
+            .filter((item) => item.id !== candidate.id)
+            .map((item) => item.name)}
           ariaLabel="Nom du candidat"
           className={isDifferent(candidate, "name") ? "assumption-diff" : ""}
           title={isDifferent(candidate, "name") ? `Valeur de l'hypothèse : ${getBaseline(candidate)?.name || "candidat personnalisé"}` : undefined}
@@ -105,9 +131,19 @@ export default function CandidatesTable({
               <CandidateAutocomplete
                 value={draft.name}
                 options={candidateOptions}
+                excludeNames={simulation.candidates.map((candidate) => candidate.name)}
                 ariaLabel="Ajouter un candidat"
                 placeholder="Ajouter un candidat…"
-                onChange={(name) => setDraft((current) => ({ ...current, name }))}
+                invalid={duplicateName}
+                invalidAttempt={duplicateAttempt}
+                invalidMessage={duplicateName ? "Déjà dans le tableau" : undefined}
+                onInvalidAnimationEnd={() => setDuplicateName(false)}
+                onChange={(name) => {
+                  setDraft((current) => ({ ...current, name }));
+                  setDuplicateName(false);
+                  setDuplicateAttempt(0);
+                  setDraftError("");
+                }}
                 onEnterCommit={(name) => submitDraft(name)}
               />
           );
@@ -123,7 +159,7 @@ export default function CandidatesTable({
           );
           return column.key === "votes" ? "—" : null;
         }}
-        onEnterLastRow={submitDraft}
+        onEnterLastRow={() => submitDraft()}
         footer={(
           <tr>
             <td>Total</td>
@@ -134,6 +170,7 @@ export default function CandidatesTable({
           </tr>
         )}
       />
+      {draftError && <p className="form-error" role="alert">{draftError}</p>}
       <p className="hint">
         Cliquez dans une cellule vide en bas du tableau pour ajouter un candidat. Naviguez avec les flèches
         ↑↓←→ ou <kbd>Tab</kbd>, validez une ligne avec <kbd>Entrée</kbd>. Tout est enregistré automatiquement.

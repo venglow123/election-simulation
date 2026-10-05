@@ -9,6 +9,7 @@ import {
   createHypothesisCandidateRecord,
   createTransferHypothesisRecord,
   createTransferRowRecord,
+  getElectionCandidateUsageCount,
 } from "./model.js";
 import { isValidTagColor, normalizeTagName, pickTagColor } from "../utils/tags.js";
 import { buildElectionPayload, validateElectionPayload } from "../utils/electionExchange.js";
@@ -196,15 +197,7 @@ export const electionApi = {
       .sort((a, b) => a.name.localeCompare(b.name, "fr"))
       .map((candidate) => ({
         ...candidate,
-        usage_count: state.simulations
-          .filter((simulation) => simulation.election_id === election.id)
-          .reduce((count, simulation) => count + simulation.candidates.filter((item) => item.name === candidate.name).length, 0)
-          + election.hypotheses.reduce((count, hypothesis) => (
-            count + hypothesis.candidates.filter((item) => item.name === candidate.name).length
-          ), 0)
-          + election.transfer_hypotheses.reduce((count, hypothesis) => (
-            count + hypothesis.candidate_transfers.filter((item) => item.name === candidate.name).length
-          ), 0),
+        usage_count: getElectionCandidateUsageCount(state, election, candidate.name),
       }));
   },
 

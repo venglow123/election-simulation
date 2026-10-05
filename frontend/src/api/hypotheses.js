@@ -1,5 +1,6 @@
 import { loadState, saveState } from "./storage.js";
-import { toFloat, findHypothesis, findHypothesisCandidate, findElection, registerElectionCandidate, createCandidateRecord, createHypothesisRecord, createHypothesisCandidateRecord, detachHypothesisFromSimulation, syncUpdatedHypothesisCandidate } from "./model.js";
+import { toFloat, findHypothesis, findHypothesisCandidate, findElection, registerElectionCandidate, removeUnusedElectionCandidate, createCandidateRecord, createHypothesisRecord, createHypothesisCandidateRecord, detachHypothesisFromSimulation, syncUpdatedHypothesisCandidate } from "./model.js";
+import { normalizeCandidateName } from "../utils/candidateNames.js";
 
 export const hypothesisApi = {
   listElectionHypotheses: async (electionId) => {
@@ -76,13 +77,23 @@ export const hypothesisApi = {
     const hypothesis = findHypothesis(election, hypothesisId);
     const name = (payload.name || "").trim();
     if (!name) throw new Error("Le nom du candidat est obligatoire.");
+    const normalizedName = normalizeCandidateName(name);
+    if (hypothesis.candidates.some((candidate) => normalizeCandidateName(candidate.name) === normalizedName)) {
+      throw new Error("Ce candidat existe déjà dans cette hypothèse.");
+    }
+    const linkedSimulations = state.simulations.filter((simulation) => (
+      simulation.election_id === election.id && simulation.r1_hypothesis_id === hypothesis.id
+    ));
+    if (linkedSimulations.some((simulation) => (
+      simulation.candidates.some((candidate) => normalizeCandidateName(candidate.name) === normalizedName)
+    ))) {
+      throw new Error("Ce candidat existe déjà dans un scénario lié.");
+    }
     const candidate = createHypothesisCandidateRecord(state, election.id, hypothesis, {
       name,
       pct_r1: Math.max(toFloat(payload.pct_r1, 0), 0),
     });
-    for (const simulation of state.simulations.filter((item) => (
-      item.election_id === election.id && item.r1_hypothesis_id === hypothesis.id
-    ))) {
+    for (const simulation of linkedSimulations) {
       if (simulation.r1_excluded_hypothesis_candidate_ids.includes(candidate.id)) continue;
       createCandidateRecord(state, simulation, {
         ...candidate,
@@ -98,15 +109,20 @@ export const hypothesisApi = {
     const election = findElection(state, electionId);
     const hypothesis = findHypothesis(election, hypothesisId);
     const candidate = findHypothesisCandidate(hypothesis, candidateId);
+    let previousName = null;
     if ("name" in payload) {
       const name = (payload.name || "").trim();
       if (name) {
+        previousName = candidate.name;
         candidate.name = name;
         registerElectionCandidate(state, election.id, name);
       }
     }
     if ("pct_r1" in payload) candidate.pct_r1 = Math.max(toFloat(payload.pct_r1, candidate.pct_r1), 0);
     syncUpdatedHypothesisCandidate(state, election, hypothesis, candidate);
+    if (previousName && previousName !== candidate.name) {
+      removeUnusedElectionCandidate(state, election, previousName);
+    }
     saveState(state);
     return { ...hypothesis, candidates: hypothesis.candidates.map((item) => ({ ...item })) };
   },
@@ -115,7 +131,8 @@ export const hypothesisApi = {
     const state = loadState();
     const election = findElection(state, electionId);
     const hypothesis = findHypothesis(election, hypothesisId);
-    findHypothesisCandidate(hypothesis, candidateId);
+    const candidate = findHypothesisCandidate(hypothesis, candidateId);
+    const previousName = candidate.name;
     hypothesis.candidates = hypothesis.candidates.filter((item) => item.id !== Number(candidateId));
     for (const simulation of state.simulations.filter((item) => (
       item.election_id === election.id && item.r1_hypothesis_id === hypothesis.id
@@ -126,6 +143,7 @@ export const hypothesisApi = {
       simulation.r1_excluded_hypothesis_candidate_ids = simulation.r1_excluded_hypothesis_candidate_ids
         .filter((id) => id !== Number(candidateId));
     }
+    removeUnusedElectionCandidate(state, election, previousName);
     saveState(state);
     return { ...hypothesis, candidates: hypothesis.candidates.map((candidate) => ({ ...candidate })) };
   },

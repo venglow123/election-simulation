@@ -106,6 +106,7 @@ export default function HypothesisPage() {
   async function handleDeleteCandidate(candidateId) {
     const updated = await api.deleteHypothesisCandidate(electionId, hypothesisId, candidateId);
     setHypothesis(updated);
+    setCandidateOptions(await api.listElectionCandidates(electionId));
     setSaveError("");
   }
 

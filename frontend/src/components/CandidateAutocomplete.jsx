@@ -1,30 +1,43 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { moveGridFocus } from "../hooks/useGridNavigation.js";
+import { normalizeCandidateName } from "../utils/candidateNames.js";
 
-function normalize(value) {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toLowerCase();
-}
-
-export default function CandidateAutocomplete({ value, options, onChange, onEnterCommit, placeholder, ariaLabel, className = "", title }) {
+export default function CandidateAutocomplete({
+  value,
+  options,
+  excludeNames = [],
+  onChange,
+  onEnterCommit,
+  placeholder,
+  ariaLabel,
+  className = "",
+  title,
+  invalid = false,
+  invalidAttempt = 0,
+  invalidMessage,
+  onInvalidAnimationEnd,
+}) {
   const inputRef = useRef(null);
+  const errorId = `candidate-error-${useId()}`;
   const [isOpen, setIsOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
 
   const suggestions = useMemo(() => {
-    const query = normalize(value);
+    const query = normalizeCandidateName(value);
     const matches = options
-      .filter((option) => !query || normalize(option.name).includes(query))
+      .filter((option) => !query || normalizeCandidateName(option.name).includes(query))
+      .filter((option) => !excludeNames.some((name) => normalizeCandidateName(name) === normalizeCandidateName(option.name)))
       .slice(0, 8)
       .map((option) => ({ type: "existing", name: option.name, party: option.party }));
-    if (query && !options.some((option) => normalize(option.name) === query)) {
+    if (
+      query
+      && !options.some((option) => normalizeCandidateName(option.name) === query)
+      && !excludeNames.some((name) => normalizeCandidateName(name) === query)
+    ) {
       matches.unshift({ type: "create", name: String(value).trim() });
     }
     return matches;
-  }, [options, value]);
+  }, [excludeNames, options, value]);
 
   useEffect(() => setHighlight(0), [value]);
 
@@ -64,9 +77,11 @@ export default function CandidateAutocomplete({ value, options, onChange, onEnte
       <input
         ref={inputRef}
         type="text"
-        className="grid-input"
+        className={`grid-input ${invalidAttempt ? `candidate-invalid-${invalidAttempt % 2 ? "a" : "b"}` : ""}`}
         autoComplete="off"
         aria-label={ariaLabel}
+        aria-invalid={invalid || undefined}
+        aria-describedby={invalidMessage ? errorId : undefined}
         aria-expanded={open}
         placeholder={placeholder}
         value={value}
@@ -74,9 +89,13 @@ export default function CandidateAutocomplete({ value, options, onChange, onEnte
           setIsOpen(true);
           onChange(event.target.value);
         }}
-        onKeyDown={handleKeyDown}
+        onKeyDownCapture={handleKeyDown}
+        onAnimationEnd={(event) => {
+          if (event.animationName.startsWith("candidate-invalid-fade-")) onInvalidAnimationEnd?.();
+        }}
         onBlur={() => setIsOpen(false)}
       />
+      {invalidMessage && <span id={errorId} className="candidate-input-error" role="tooltip">{invalidMessage}</span>}
       {open && (
         <ul className="autocomplete-list" role="listbox">
           {suggestions.map((item, index) => (

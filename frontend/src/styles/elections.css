@@ -155,3 +155,30 @@
   margin-top: -6px;
 }
 
+.election-settings-panel .new-row input.grid-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.election-settings-panel .new-row input.grid-input:hover {
+  border-color: #b8c0cc;
+}
+
+.election-settings-panel .new-row input.grid-input:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.election-settings-panel .new-row input.grid-input::placeholder {
+  color: #8993a2;
+  font-style: normal;
+}
