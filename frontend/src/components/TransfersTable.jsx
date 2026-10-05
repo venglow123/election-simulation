@@ -21,6 +21,7 @@ export default function TransfersTable({
   onFieldChange,
   onAbstentionFieldChange,
   headerActions,
+  headerTags,
   baseline,
   notice,
   onEditHypothesis,
@@ -42,6 +43,7 @@ export default function TransfersTable({
         <h2>Reports de voix vers le 2e tour</h2>
         {hasFinalists && headerActions && <div className="candidate-table-actions">{headerActions}</div>}
       </div>
+      {headerTags}
       {notice}
       {uncovered.length > 0 && (
         <p className="transfer-uncovered-banner" role="status">

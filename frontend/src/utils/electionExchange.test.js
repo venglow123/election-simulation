@@ -39,6 +39,8 @@ const payload = {
         abstention_to_a: 10,
         abstention_to_b: 20,
         r1_hypothesis: 0,
+        r1_tags: [],
+        r2_tags: [],
         r1_excluded: [1],
         r2_hypothesis: 0,
         candidates: [
@@ -69,6 +71,19 @@ test("les références hors limites sont rejetées", () => {
   const broken = structuredClone(payload);
   broken.election.scenarios[0].r1_hypothesis = 5;
   assert.throws(() => validateElectionPayload(broken), /hypothèse de 1er tour/i);
+});
+
+test("les tags de section sont optionnels pour les anciens exports et validés par index", () => {
+  const legacy = structuredClone(payload);
+  delete legacy.election.scenarios[0].r1_tags;
+  delete legacy.election.scenarios[0].r2_tags;
+  assert.deepEqual(validateElectionPayload(legacy), payload);
+  const tagged = structuredClone(payload);
+  tagged.election.scenarios[0].r1_tags = [0, 0];
+  tagged.election.scenarios[0].r2_tags = [0];
+  assert.deepEqual(validateElectionPayload(tagged).election.scenarios[0].r1_tags, [0]);
+  tagged.election.scenarios[0].r2_tags = [42];
+  assert.throws(() => validateElectionPayload(tagged), /tags des reports/);
 });
 
 test("un format étranger est rejeté", () => {

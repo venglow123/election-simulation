@@ -96,8 +96,10 @@ export function createSimulationRecord(state, electionId, fields) {
     abstention_to_a: 0,
     abstention_to_b: 0,
     r1_hypothesis_id: null,
+    r1_tag_ids: [],
     r1_excluded_hypothesis_candidate_ids: [],
     r2_hypothesis_id: null,
+    r2_tag_ids: [],
     candidates: [],
     ...fields,
   };

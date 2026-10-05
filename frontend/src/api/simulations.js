@@ -28,6 +28,9 @@ export const simulationApi = {
     const simulation = findSimulation(state, simulationId);
     if (simulation.election_id !== election.id) throw new Error("Scénario introuvable.");
     if (hypothesisId == null) {
+      if (simulation.r1_hypothesis_id != null) {
+        simulation.r1_tag_ids = [...findHypothesis(election, simulation.r1_hypothesis_id).tag_ids];
+      }
       detachHypothesisFromSimulation(simulation);
     } else {
       const hypothesis = findHypothesis(election, hypothesisId);
@@ -56,7 +59,7 @@ export const simulationApi = {
     const simulation = findSimulation(state, simulationId);
     if (simulation.election_id !== election.id) throw new Error("Scénario introuvable.");
     const values = Array.isArray(candidateValues) ? candidateValues : simulation.candidates;
-    const hypothesis = createHypothesisRecord(state, election);
+    const hypothesis = createHypothesisRecord(state, election, { tag_ids: [...simulation.r1_tag_ids] });
     const sourceCandidates = values.map((candidate) => createHypothesisCandidateRecord(state, election.id, hypothesis, {
       name: String(candidate.name || "").trim(),
       pct_r1: Math.max(toFloat(candidate.pct_r1, 0), 0),
@@ -84,6 +87,9 @@ export const simulationApi = {
     const simulation = findSimulation(state, simulationId);
     if (simulation.election_id !== election.id) throw new Error("Scénario introuvable.");
     if (hypothesisId == null) {
+      if (simulation.r2_hypothesis_id != null) {
+        simulation.r2_tag_ids = [...findTransferHypothesis(election, simulation.r2_hypothesis_id).tag_ids];
+      }
       simulation.r2_hypothesis_id = null;
     } else {
       applyTransferHypothesisToSimulation(election, simulation, findTransferHypothesis(election, hypothesisId));
@@ -112,6 +118,7 @@ export const simulationApi = {
     const finalists = getFinalists(simulation);
     if (finalists.length < 2) throw new Error("Le scénario doit compter au moins 2 candidats.");
     const hypothesis = createTransferHypothesisRecord(state, election, {
+      tag_ids: [...simulation.r2_tag_ids],
       finalist_a: finalists[0].name,
       finalist_b: finalists[1].name,
       abstention_to_a: simulation.abstention_to_a,
@@ -158,7 +165,16 @@ export const simulationApi = {
   },
 
   updateSimulation: (id, data) =>
-    mutate(id, (simulation) => {
+    mutate(id, (simulation, state) => {
+      for (const round of ["r1", "r2"]) {
+        const field = `${round}_tag_ids`;
+        if (!(field in data)) continue;
+        if (simulation[`${round}_hypothesis_id`] != null) {
+          throw new Error("Les tags d'une hypothèse liée ne sont pas modifiables dans le scénario.");
+        }
+        const validIds = new Set(findElection(state, simulation.election_id).tags.map((tag) => tag.id));
+        simulation[field] = [...new Set((data[field] || []).map(Number))].filter((tagId) => validIds.has(tagId));
+      }
       if ("name" in data) {
         const name = (data.name || "").trim();
         if (name) simulation.name = name;
@@ -186,8 +202,10 @@ export const simulationApi = {
       abstention_to_a: original.abstention_to_a,
       abstention_to_b: original.abstention_to_b,
       r1_hypothesis_id: original.r1_hypothesis_id,
+      r1_tag_ids: [...original.r1_tag_ids],
       r1_excluded_hypothesis_candidate_ids: [...original.r1_excluded_hypothesis_candidate_ids],
       r2_hypothesis_id: original.r2_hypothesis_id,
+      r2_tag_ids: [...original.r2_tag_ids],
     });
     for (const c of original.candidates) {
       createCandidateRecord(state, copy, {

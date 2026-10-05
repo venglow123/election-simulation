@@ -25,6 +25,12 @@ sur GitHub Pages.
 - Créer plusieurs élections et regrouper les simulations dans des workspaces
 - Gérer le référentiel de candidats et partis de chaque élection
 - Naviguer entre élections et simulations
+- Afficher les tags des hypothèses sous les titres des deux sections d'un
+  scénario. En mode Custom, sélectionner, créer ou retirer les tags avec le
+  même sélecteur que dans l'éditeur d'hypothèses; les tags des hypothèses liées
+  restent en lecture seule. Le passage en Custom conserve leurs tags, et les
+  tags personnalisés suivent la duplication, l'enregistrement comme hypothèse
+  et le partage de l'élection.
 - Faire varier le nombre d'inscrits et l'abstention du 1er tour
 - Saisir les résultats du 1er tour (candidat, pourcentage) dans un tableau
   éditable façon tableur (navigation au clavier, ajout de ligne à la volée,

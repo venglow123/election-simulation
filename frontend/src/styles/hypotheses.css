@@ -372,6 +372,34 @@
   min-width: 140px;
 }
 
+.scenario-section-tags {
+  margin-bottom: 12px;
+  min-width: 0;
+}
+
+.scenario-section-tags .tag-list,
+.scenario-section-tags .tag-input {
+  margin: 0;
+}
+
+.scenario-section-tags .tag-chip {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.scenario-section-tags .tag-chip > span {
+  min-width: 0;
+}
+
+.scenario-section-tags .tag-chip-remove {
+  flex-shrink: 0;
+}
+
+.scenario-section-tags .tag-input-field {
+  min-width: min(140px, 100%);
+}
+
 .tag-input-field input {
   width: 100%;
   padding: 3px 2px;

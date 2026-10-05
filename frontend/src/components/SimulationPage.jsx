@@ -14,6 +14,8 @@ import SankeyDetailModal from "./SankeyDetailModal.jsx";
 import FirstRoundHypothesisModal from "./FirstRoundHypothesisModal.jsx";
 import TransferHypothesisModal from "./TransferHypothesisModal.jsx";
 import WarningsPanel from "./WarningsPanel.jsx";
+import TagInput from "./TagInput.jsx";
+import TagChip from "./TagChip.jsx";
 
 const SAVE_DELAY = 400;
 
@@ -32,6 +34,7 @@ export default function SimulationPage() {
   const { refresh: refreshSidebar } = useSimulations();
   const [sim, setSim] = useState(null);
   const [candidateOptions, setCandidateOptions] = useState([]);
+  const [tags, setTags] = useState([]);
   const [notFound, setNotFound] = useState(false);
   const [isSankeyDetailOpen, setIsSankeyDetailOpen] = useState(false);
   const [isFirstRoundHypothesisOpen, setIsFirstRoundHypothesisOpen] = useState(false);
@@ -47,8 +50,8 @@ export default function SimulationPage() {
     setFirstRoundHypothesis(null);
     setTransferHypothesis(null);
     setNotFound(false);
-    Promise.all([api.getSimulation(electionId, id), api.listElectionCandidates(electionId)])
-      .then(async ([data, options]) => {
+    Promise.all([api.getSimulation(electionId, id), api.listElectionCandidates(electionId), api.listElectionTags(electionId)])
+      .then(async ([data, options, tagList]) => {
         let hypothesis = null;
         if (data.r1_hypothesis_id != null) {
           hypothesis = await api.getElectionHypothesis(electionId, data.r1_hypothesis_id);
@@ -56,6 +59,7 @@ export default function SimulationPage() {
         const r2Hypothesis = await loadTransferHypothesis(electionId, data);
         if (!cancelled) setSim(data);
         if (!cancelled) setCandidateOptions(options);
+        if (!cancelled) setTags(tagList);
         if (!cancelled) setFirstRoundHypothesis(hypothesis);
         if (!cancelled) setTransferHypothesis(r2Hypothesis);
       })
@@ -71,9 +75,10 @@ export default function SimulationPage() {
     async function refreshFromStorage(event) {
       if (event.key !== "election-simulation:v2") return;
       try {
-        const [data, options] = await Promise.all([
+        const [data, options, tagList] = await Promise.all([
           api.getSimulation(electionId, id),
           api.listElectionCandidates(electionId),
+          api.listElectionTags(electionId),
         ]);
         const hypothesis = data.r1_hypothesis_id == null
           ? null
@@ -81,6 +86,7 @@ export default function SimulationPage() {
         const r2Hypothesis = await loadTransferHypothesis(electionId, data);
         setSim(data);
         setCandidateOptions(options);
+        setTags(tagList);
         setFirstRoundHypothesis(hypothesis);
         setTransferHypothesis(r2Hypothesis);
       } catch {
@@ -284,6 +290,52 @@ export default function SimulationPage() {
     }
   }
 
+  async function saveSectionTags(round, tagIds) {
+    const field = `${round}_tag_ids`;
+    const setError = round === "r1" ? setFirstRoundError : setTransferError;
+    try {
+      const updated = await api.updateSimulation(id, { [field]: tagIds });
+      setSim((current) => current ? { ...current, [field]: updated[field] } : current);
+      setError("");
+    } catch (error) {
+      setError(error.message);
+    }
+  }
+
+  async function createSectionTag(round, name) {
+    try {
+      const tag = await api.createElectionTag(electionId, { name });
+      setTags(await api.listElectionTags(electionId));
+      await saveSectionTags(round, [...sim[`${round}_tag_ids`], tag.id]);
+    } catch (error) {
+      (round === "r1" ? setFirstRoundError : setTransferError)(error.message);
+    }
+  }
+
+  function sectionTags(round, hypothesis) {
+    const selectedIds = hypothesis ? hypothesis.tag_ids : sim[`${round}_tag_ids`];
+    if (hypothesis && !selectedIds.length) return null;
+    return (
+      <div className="scenario-section-tags" role="group" aria-label={round === "r1" ? "Tags du premier tour" : "Tags des reports de voix"}>
+        {hypothesis ? (
+          <div className="tag-list">
+            {selectedIds.map((tagId) => tags.find((tag) => tag.id === tagId)).filter(Boolean).map((tag) => (
+              <TagChip key={tag.id} tag={tag} />
+            ))}
+          </div>
+        ) : (
+          <TagInput
+            tags={tags}
+            selectedIds={selectedIds}
+            onAdd={(tagId) => saveSectionTags(round, [...selectedIds, tagId])}
+            onCreate={(name) => createSectionTag(round, name)}
+            onRemove={(tagId) => saveSectionTags(round, selectedIds.filter((selectedId) => selectedId !== tagId))}
+          />
+        )}
+      </div>
+    );
+  }
+
   if (notFound) return <p className="empty">Scénario introuvable.</p>;
   if (!sim) return null;
 
@@ -304,6 +356,7 @@ export default function SimulationPage() {
             simulation={sim}
             candidateOptions={candidateOptions}
             baselineCandidates={firstRoundHypothesis?.candidates}
+            headerTags={sectionTags("r1", firstRoundHypothesis)}
             onFieldChange={saveCandidateField}
             onCreate={handleCreateCandidate}
             onDelete={handleDeleteCandidate}
@@ -330,6 +383,7 @@ export default function SimulationPage() {
             onFieldChange={saveTransferField}
             onAbstentionFieldChange={saveAbstentionTransferField}
             baseline={transferBaseline}
+            headerTags={sectionTags("r2", transferHypothesis)}
             onEditHypothesis={transferHypothesis ? () => openTransferHypothesisEditor(transferHypothesis.id) : undefined}
             notice={transferHypothesis && sim.has_finalists && !transferBaseline && (
               <p className="transfer-uncovered-banner" role="status">

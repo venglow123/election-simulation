@@ -11,6 +11,7 @@ export default function CandidatesTable({
   title = "Résultats du 1er tour",
   showVotes = true,
   headerActions,
+  headerTags,
   baselineCandidates,
 }) {
   const [draft, setDraft] = useState({ name: "", pct_r1: "" });
@@ -94,6 +95,7 @@ export default function CandidatesTable({
         <h2>{title}</h2>
         {headerActions && <div className="candidate-table-actions">{headerActions}</div>}
       </div>
+      {headerTags}
       <EditableTable
         columns={columns}
         rows={simulation.candidates}
