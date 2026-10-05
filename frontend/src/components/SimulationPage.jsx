@@ -206,6 +206,7 @@ export default function SimulationPage() {
   async function handleDeleteCandidate(candidateId) {
     const data = await api.deleteCandidate(id, candidateId);
     applyState(data);
+    setCandidateOptions(await api.listElectionCandidates(electionId));
     refreshSidebar();
   }
 

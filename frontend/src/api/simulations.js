@@ -1,6 +1,7 @@
 import { loadState, saveState } from "./storage.js";
-import { toFloat, toInt, findSimulation, findCandidate, findHypothesis, findElection, ensureDefaultElection, registerElectionCandidate, createSimulationRecord, createCandidateRecord, createHypothesisRecord, createHypothesisCandidateRecord, applyHypothesisToSimulation, detachHypothesisFromSimulation, getSimulationPayload, mutate, findTransferHypothesis, applyTransferHypothesisToSimulation, computeSimulationTransferBaseline, createTransferHypothesisRecord, createTransferRowRecord, serializeTransferHypothesis } from "./model.js";
+import { toFloat, toInt, findSimulation, findCandidate, findHypothesis, findElection, ensureDefaultElection, registerElectionCandidate, removeUnusedElectionCandidate, createSimulationRecord, createCandidateRecord, createHypothesisRecord, createHypothesisCandidateRecord, applyHypothesisToSimulation, detachHypothesisFromSimulation, getSimulationPayload, mutate, findTransferHypothesis, applyTransferHypothesisToSimulation, computeSimulationTransferBaseline, createTransferHypothesisRecord, createTransferRowRecord, serializeTransferHypothesis } from "./model.js";
 import { alignTransferColumns, getFinalists, serializeSimulation } from "../utils/simulationEngine.js";
+import { normalizeCandidateName } from "../utils/candidateNames.js";
 
 export const simulationApi = {
   listSimulations: async (electionId) =>
@@ -232,6 +233,9 @@ export const simulationApi = {
     mutate(id, (simulation, state) => {
       const name = (data.name || "").trim();
       if (!name) throw new Error("Le nom du candidat est obligatoire.");
+      if (simulation.candidates.some((candidate) => normalizeCandidateName(candidate.name) === normalizeCandidateName(name))) {
+        throw new Error("Ce candidat existe déjà dans le tableau.");
+      }
       registerElectionCandidate(state, simulation.election_id, name);
       const candidate = createCandidateRecord(state, simulation, { name, pct_r1: toFloat(data.pct_r1, 0) });
       alignTransferColumns(simulation);
@@ -245,18 +249,21 @@ export const simulationApi = {
   updateCandidate: (id, candidateId, data) =>
     mutate(id, (simulation, state) => {
       const candidate = findCandidate(simulation, candidateId);
+      const election = findElection(state, simulation.election_id);
       const hypothesis = simulation.r1_hypothesis_id == null
         ? null
-        : findElection(state, simulation.election_id).hypotheses.find((item) => item.id === simulation.r1_hypothesis_id);
+        : election.hypotheses.find((item) => item.id === simulation.r1_hypothesis_id);
       const source = hypothesis?.candidates.find((item) => item.id === candidate.hypothesis_candidate_id);
       if ("name" in data) {
         const name = (data.name || "").trim();
         if (name) {
+          const previousName = candidate.name;
           candidate.name = name;
           if (candidate.hypothesis_candidate_id != null) {
             candidate.r1_name_override = source ? name !== source.name : true;
           }
-          registerElectionCandidate(state, simulation.election_id, name);
+          registerElectionCandidate(state, election.id, name);
+          if (previousName !== name) removeUnusedElectionCandidate(state, election, previousName);
         }
       }
       if ("pct_r1" in data) {
@@ -268,12 +275,15 @@ export const simulationApi = {
     }),
 
   deleteCandidate: (id, candidateId) =>
-    mutate(id, (simulation) => {
+    mutate(id, (simulation, state) => {
       const candidate = findCandidate(simulation, candidateId);
+      const election = findElection(state, simulation.election_id);
+      const previousName = candidate.name;
       if (candidate.hypothesis_candidate_id != null && simulation.r1_hypothesis_id != null) {
         simulation.r1_excluded_hypothesis_candidate_ids.push(candidate.hypothesis_candidate_id);
       }
       simulation.candidates = simulation.candidates.filter((c) => c.id !== Number(candidateId));
+      removeUnusedElectionCandidate(state, election, previousName);
     }),
 
   updateTransfer: (id, candidateId, data) =>

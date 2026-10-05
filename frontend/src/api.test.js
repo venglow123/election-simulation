@@ -168,7 +168,97 @@ test("les scénarios et le référentiel de candidats restent isolés par élect
   assert.equal((await api.getSimulation(secondElection.id, secondSimulation.id)).candidates.length, 0);
   assert.equal((await api.listElectionCandidates(firstElection.id))[0].party, "Indépendante");
   assert.equal((await api.listElectionCandidates(firstElection.id))[0].usage_count, 1);
-  assert.ok(candidateId > 0);
+});
+
+test("le référentiel retire un candidat supprimé ou remplacé seulement sans autre usage", async () => {
+  resetStorage();
+  const election = await api.createElection("Municipales");
+  const first = await api.createSimulation(election.id, "Scénario A");
+  const second = await api.createSimulation(election.id, "Scénario B");
+  const { new_candidate_id: firstAliceId } = await api.addCandidate(first.id, { name: "Alice", pct_r1: 50 });
+  const { new_candidate_id: secondAliceId } = await api.addCandidate(second.id, { name: "Alice", pct_r1: 60 });
+  await api.createElectionCandidate(election.id, { name: "Benoît" });
+
+  await api.deleteCandidate(first.id, firstAliceId);
+  assert.equal((await api.listElectionCandidates(election.id)).find((candidate) => candidate.name === "Alice").usage_count, 1);
+
+  await api.updateCandidate(second.id, secondAliceId, { name: "Benoît" });
+  const references = await api.listElectionCandidates(election.id);
+  assert.equal(references.some((candidate) => candidate.name === "Alice"), false);
+  assert.equal(references.find((candidate) => candidate.name === "Benoît").usage_count, 1);
+
+  const { new_candidate_id: chloeId } = await api.addCandidate(first.id, { name: "Chloé", pct_r1: 10 });
+  await api.deleteCandidate(first.id, chloeId);
+  assert.equal((await api.listElectionCandidates(election.id)).some((candidate) => candidate.name === "Chloé"), false);
+});
+
+test("le remplacement d'une ligne conserve le candidat si une hypothèse l'utilise encore", async () => {
+  resetStorage();
+  const election = await api.createElection("Municipales");
+  const simulation = await api.createSimulation(election.id, "Scénario");
+  const { new_candidate_id: aliceId } = await api.addCandidate(simulation.id, { name: "Alice", pct_r1: 50 });
+  const hypothesis = await api.createElectionHypothesis(election.id);
+  await api.addHypothesisCandidate(election.id, hypothesis.id, { name: "Alice", pct_r1: 55 });
+
+  await api.updateCandidate(simulation.id, aliceId, { name: "Benoît" });
+
+  const references = await api.listElectionCandidates(election.id);
+  assert.equal(references.find((candidate) => candidate.name === "Alice").usage_count, 1);
+  assert.equal(references.find((candidate) => candidate.name === "Benoît").usage_count, 1);
+});
+
+test("les candidats d'hypothèse sont nettoyés après suppression ou remplacement si aucun usage ne reste", async () => {
+  resetStorage();
+  const election = await api.createElection("Municipales");
+  const hypothesis = await api.createElectionHypothesis(election.id);
+  const otherHypothesis = await api.createElectionHypothesis(election.id);
+  const first = await api.addHypothesisCandidate(election.id, hypothesis.id, { name: "Alice", pct_r1: 50 });
+  await api.addHypothesisCandidate(election.id, otherHypothesis.id, { name: "Alice", pct_r1: 55 });
+  const candidateToReplace = first.candidates[0];
+  const candidateToDelete = await api.addHypothesisCandidate(election.id, hypothesis.id, { name: "Chloé", pct_r1: 10 });
+
+  await api.deleteHypothesisCandidate(election.id, hypothesis.id, candidateToDelete.candidates[1].id);
+  assert.equal((await api.listElectionCandidates(election.id)).find((candidate) => candidate.name === "Chloé"), undefined);
+  assert.equal((await api.listElectionCandidates(election.id)).find((candidate) => candidate.name === "Alice").usage_count, 2);
+
+  await api.updateHypothesisCandidate(election.id, hypothesis.id, candidateToReplace.id, { name: "Benoît" });
+  const references = await api.listElectionCandidates(election.id);
+  assert.equal(references.some((candidate) => candidate.name === "Alice"), true);
+  assert.equal(references.find((candidate) => candidate.name === "Alice").usage_count, 1);
+  assert.equal(references.find((candidate) => candidate.name === "Benoît").usage_count, 1);
+
+  await api.deleteHypothesisCandidate(election.id, otherHypothesis.id, (await api.getElectionHypothesis(election.id, otherHypothesis.id)).candidates[0].id);
+  assert.equal((await api.listElectionCandidates(election.id)).some((candidate) => candidate.name === "Alice"), false);
+});
+
+test("un candidat ne peut pas être ajouté deux fois au même scénario ou à la même hypothèse", async () => {
+  resetStorage();
+  const election = await api.createElection("Municipales");
+  const simulation = await api.createSimulation(election.id, "Scénario");
+  await api.addCandidate(simulation.id, { name: "Élodie", pct_r1: 50 });
+
+  await assert.rejects(
+    api.addCandidate(simulation.id, { name: "elodie", pct_r1: 10 }),
+    /existe déjà dans le tableau/
+  );
+  assert.equal((await api.getSimulation(simulation.id)).candidates.length, 1);
+
+  const hypothesis = await api.createElectionHypothesis(election.id);
+  await api.addHypothesisCandidate(election.id, hypothesis.id, { name: "Alice", pct_r1: 50 });
+  await assert.rejects(
+    api.addHypothesisCandidate(election.id, hypothesis.id, { name: "alice", pct_r1: 10 }),
+    /existe déjà dans cette hypothèse/
+  );
+  assert.equal((await api.getElectionHypothesis(election.id, hypothesis.id)).candidates.length, 1);
+
+  const linked = await api.createSimulation(election.id, "Scénario lié");
+  await api.setSimulationFirstRoundHypothesis(election.id, linked.id, hypothesis.id);
+  await api.addCandidate(linked.id, { name: "Benoît", pct_r1: 10 });
+  await assert.rejects(
+    api.addHypothesisCandidate(election.id, hypothesis.id, { name: "Benoît", pct_r1: 10 }),
+    /existe déjà dans un scénario lié/
+  );
+  assert.equal((await api.getElectionHypothesis(election.id, hypothesis.id)).candidates.length, 1);
 });
 
 test("les hypothèses du premier tour sont isolées, modifiables et dupliquées indépendamment", async () => {

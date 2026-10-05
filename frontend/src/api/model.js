@@ -82,6 +82,26 @@ export function registerElectionCandidate(state, electionId, name, party = "") {
   return candidate;
 }
 
+export function getElectionCandidateUsageCount(state, election, name) {
+  return state.simulations
+    .filter((simulation) => simulation.election_id === election.id)
+    .reduce((count, simulation) => count + simulation.candidates.filter((candidate) => candidate.name === name).length, 0)
+    + election.hypotheses.reduce((count, hypothesis) => (
+      count + hypothesis.candidates.filter((candidate) => candidate.name === name).length
+    ), 0)
+    + election.transfer_hypotheses.reduce((count, hypothesis) => (
+      count
+      + hypothesis.candidate_transfers.filter((candidate) => candidate.name === name).length
+      + Number(hypothesis.finalist_a === name)
+      + Number(hypothesis.finalist_b === name)
+    ), 0);
+}
+
+export function removeUnusedElectionCandidate(state, election, name) {
+  if (getElectionCandidateUsageCount(state, election, name) > 0) return;
+  election.candidates = election.candidates.filter((candidate) => candidate.name !== name);
+}
+
 export function createSimulationRecord(state, electionId, fields) {
   const election = findElection(state, electionId);
   const simulation = {
@@ -311,4 +331,3 @@ export function mutate(id, apply) {
     return { ...serializeSimulation(simulation), election_id: simulation.election_id, ...extra };
   });
 }
-
