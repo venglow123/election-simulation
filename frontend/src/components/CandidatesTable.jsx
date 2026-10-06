@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Candidate from "./Candidate.jsx";
 import CandidateAutocomplete from "./CandidateAutocomplete.jsx";
 import EditableTable from "./EditableTable.jsx";
 import { normalizeCandidateName } from "../utils/candidateNames.js";
@@ -69,17 +70,19 @@ export default function CandidatesTable({
       key: "candidate",
       label: "Candidat",
       render: (candidate) => (
-        <CandidateAutocomplete
-          value={candidate.name}
-          options={candidateOptions}
-          excludeNames={simulation.candidates
-            .filter((item) => item.id !== candidate.id)
-            .map((item) => item.name)}
-          ariaLabel="Nom du candidat"
-          className={isDifferent(candidate, "name") ? "assumption-diff" : ""}
-          title={isDifferent(candidate, "name") ? `Valeur de l'hypothèse : ${getBaseline(candidate)?.name || "candidat personnalisé"}` : undefined}
-          onChange={(name) => onFieldChange(candidate.id, "name", name)}
-        />
+        <Candidate name={candidate.name}>
+          <CandidateAutocomplete
+            value={candidate.name}
+            options={candidateOptions}
+            excludeNames={simulation.candidates
+              .filter((item) => item.id !== candidate.id)
+              .map((item) => item.name)}
+            ariaLabel="Nom du candidat"
+            className={isDifferent(candidate, "name") ? "assumption-diff" : ""}
+            title={isDifferent(candidate, "name") ? `Valeur de l'hypothèse : ${getBaseline(candidate)?.name || "candidat personnalisé"}` : undefined}
+            onChange={(name) => onFieldChange(candidate.id, "name", name)}
+          />
+        </Candidate>
       ),
     },
     {
@@ -128,6 +131,7 @@ export default function CandidatesTable({
         getRowKey={(candidate) => candidate.id}
         renderDraftCell={(column) => {
           if (column.key === "candidate") return (
+            <Candidate name={draft.name} editable={false}>
               <CandidateAutocomplete
                 value={draft.name}
                 options={candidateOptions}
@@ -146,6 +150,7 @@ export default function CandidatesTable({
                 }}
                 onEnterCommit={(name) => submitDraft(name)}
               />
+            </Candidate>
           );
           if (column.key === "pct_r1") return (
               <input

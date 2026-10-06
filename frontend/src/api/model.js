@@ -1,6 +1,7 @@
 import { getFinalists, serializeSimulation } from "../utils/simulationEngine.js";
 import { buildPartyIndex, computeTransferBaseline } from "../utils/transferHypothesis.js";
 import { loadState, saveState } from "./storage.js";
+import { buildCandidateColorIndex, DEFAULT_ABSTENTION_COLOR, getAbstentionColor, isValidCandidateColor, pickCandidateColor } from "../utils/candidateColors.js";
 
 export function toFloat(value, fallback = 0) {
   const parsed = Number(String(value).replace(",", "."));
@@ -63,12 +64,13 @@ export function ensureDefaultElection(state) {
       hypotheses: [],
       transfer_hypotheses: [],
       tags: [],
+      abstention_color: DEFAULT_ABSTENTION_COLOR,
     });
   }
   return state.elections[0];
 }
 
-export function registerElectionCandidate(state, electionId, name, party = "") {
+export function registerElectionCandidate(state, electionId, name, party = "", color = null) {
   const election = findElection(state, electionId);
   const candidateName = String(name || "").trim();
   if (!candidateName) return;
@@ -77,9 +79,24 @@ export function registerElectionCandidate(state, electionId, name, party = "") {
     if (party && !existing.party) existing.party = party;
     return existing;
   }
-  const candidate = { id: state.nextElectionCandidateId++, name: candidateName, party: String(party || "").trim() };
+  const candidate = {
+    id: state.nextElectionCandidateId++,
+    name: candidateName,
+    party: String(party || "").trim(),
+    color: isValidCandidateColor(color)
+      ? color.toLowerCase()
+      : pickCandidateColor(election.candidates.map((item) => item.color)),
+  };
   election.candidates.push(candidate);
   return candidate;
+}
+
+export function getSimulationColors(state, electionId) {
+  const election = state.elections.find((item) => item.id === Number(electionId));
+  return {
+    colorByName: buildCandidateColorIndex(election?.candidates),
+    abstentionColor: getAbstentionColor(election),
+  };
 }
 
 export function getElectionCandidateUsageCount(state, election, name) {
@@ -208,8 +225,11 @@ export function detachHypothesisFromSimulation(simulation) {
   }));
 }
 
-export function getSimulationPayload(simulation) {
-  return { ...serializeSimulation(simulation), election_id: simulation.election_id };
+export function getSimulationPayload(simulation, state) {
+  return {
+    ...serializeSimulation(simulation, getSimulationColors(state, simulation.election_id)),
+    election_id: simulation.election_id,
+  };
 }
 
 export function createTransferHypothesisRecord(state, election, fields = {}) {
@@ -328,6 +348,6 @@ export function mutate(id, apply) {
     const simulation = findSimulation(state, id);
     const extra = apply(simulation, state);
     saveState(state);
-    return { ...serializeSimulation(simulation), election_id: simulation.election_id, ...extra };
+    return { ...getSimulationPayload(simulation, state), ...extra };
   });
 }

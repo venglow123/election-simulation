@@ -6,6 +6,8 @@ import Breadcrumbs from "./Breadcrumbs.jsx";
 import EditableTable from "./EditableTable.jsx";
 import TagChip from "./TagChip.jsx";
 import { pickTagColor } from "../utils/tags.js";
+import { DEFAULT_ABSTENTION_COLOR, FALLBACK_CANDIDATE_COLOR, pickCandidateColor } from "../utils/candidateColors.js";
+import { debounceByKey } from "../utils/debounceByKey.js";
 import { summarizeTransferHypothesis } from "../utils/transferHypothesis.js";
 
 function summarizeFirstRoundHypothesis(hypothesis) {
@@ -26,7 +28,7 @@ export default function ElectionSettingsPage() {
   const [confirmingDeletion, setConfirmingDeletion] = useState(false);
   const [candidates, setCandidates] = useState([]);
   const [hypotheses, setHypotheses] = useState([]);
-  const [draft, setDraft] = useState({ name: "", party: "" });
+  const [draft, setDraft] = useState({ name: "", party: "", color: "" });
   const [candidateError, setCandidateError] = useState("");
   const [hypothesisError, setHypothesisError] = useState("");
   const [transferHypotheses, setTransferHypotheses] = useState([]);
@@ -34,6 +36,7 @@ export default function ElectionSettingsPage() {
   const [tags, setTags] = useState([]);
   const [tagDraft, setTagDraft] = useState({ name: "", color: "" });
   const [tagError, setTagError] = useState("");
+  const [abstentionColor, setAbstentionColor] = useState(DEFAULT_ABSTENTION_COLOR);
 
   useEffect(() => setName(election?.name || ""), [election]);
 
@@ -44,6 +47,14 @@ export default function ElectionSettingsPage() {
     }).catch(() => {
       if (!cancelled) setTags([]);
     });
+    return () => { cancelled = true; };
+  }, [electionId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.getElection(electionId).then((data) => {
+      if (!cancelled) setAbstentionColor(data.abstention_color);
+    }).catch(() => {});
     return () => { cancelled = true; };
   }, [electionId]);
 
@@ -90,16 +101,43 @@ export default function ElectionSettingsPage() {
     }
   }
 
+  const draftCandidateColor = draft.color || pickCandidateColor(candidates.map((candidate) => candidate.color));
+
   async function addCandidate() {
     const candidateName = draft.name.trim();
     if (!candidateName) return;
     setCandidateError("");
     try {
-      setCandidates(await api.createElectionCandidate(election.id, { name: candidateName, party: draft.party.trim() }));
-      setDraft({ name: "", party: "" });
+      setCandidates(await api.createElectionCandidate(election.id, {
+        name: candidateName,
+        party: draft.party.trim(),
+        color: draftCandidateColor,
+      }));
+      setDraft({ name: "", party: "", color: "" });
     } catch {
       setCandidateError(`« ${candidateName} » existe déjà dans cette élection.`);
     }
+  }
+
+  function saveAbstentionColor(color) {
+    setAbstentionColor(color);
+    debounceByKey(`settings-abstention-color:${election.id}`, () => (
+      api.setElectionAbstentionColor(election.id, color)
+        .then(() => setCandidateError(""))
+        .catch((error) => setCandidateError(error.message))
+    ), 150);
+  }
+
+  function saveCandidateColor(candidateId, color) {
+    handleCandidateFieldChange(candidateId, "color", color);
+    debounceByKey(`settings-candidate-color:${candidateId}`, () => (
+      api.updateElectionCandidate(election.id, candidateId, { color })
+        .then((list) => {
+          setCandidates(list);
+          setCandidateError("");
+        })
+        .catch((error) => setCandidateError(error.message))
+    ), 150);
   }
 
   function handleCandidateFieldChange(candidateId, field, value) {
@@ -281,6 +319,16 @@ export default function ElectionSettingsPage() {
         <EditableTable
           columns={[
             {
+              key: "color",
+              label: "Couleur",
+              cellClassName: "tag-color-cell",
+              render: (candidate) => (
+                <input type="color" className="tag-color-input" value={candidate.color || FALLBACK_CANDIDATE_COLOR}
+                  aria-label={`Couleur de ${candidate.name}`}
+                  onChange={(event) => saveCandidateColor(candidate.id, event.target.value)} />
+              ),
+            },
+            {
               key: "name",
               label: "Nom",
               render: (candidate) => (
@@ -312,6 +360,10 @@ export default function ElectionSettingsPage() {
           rows={candidates}
           getRowKey={(candidate) => candidate.id}
           renderDraftCell={(column) => {
+            if (column.key === "color") return (
+              <input type="color" className="tag-color-input" value={draftCandidateColor} aria-label="Couleur du nouveau candidat"
+                onChange={(event) => setDraft((current) => ({ ...current, color: event.target.value }))} />
+            );
             if (column.key === "name") return (
               <input className="grid-input" value={draft.name} placeholder="Nom du candidat" aria-label="Nom du nouveau candidat"
                 onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} />
@@ -325,6 +377,11 @@ export default function ElectionSettingsPage() {
           }}
           onEnterLastRow={addCandidate}
         />
+        <label className="abstention-color-field">
+          <input type="color" className="tag-color-input" value={abstentionColor} aria-label="Couleur des abstentionnistes"
+            onChange={(event) => saveAbstentionColor(event.target.value)} />
+          <span>Couleur des abstentionnistes</span>
+        </label>
         {candidateError && <p className="form-error">{candidateError}</p>}
       </section>
       <section className="panel election-settings-panel">

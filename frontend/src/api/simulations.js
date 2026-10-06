@@ -1,6 +1,6 @@
 import { loadState, saveState } from "./storage.js";
 import { toFloat, toInt, findSimulation, findCandidate, findHypothesis, findElection, ensureDefaultElection, registerElectionCandidate, removeUnusedElectionCandidate, createSimulationRecord, createCandidateRecord, createHypothesisRecord, createHypothesisCandidateRecord, applyHypothesisToSimulation, detachHypothesisFromSimulation, getSimulationPayload, mutate, findTransferHypothesis, applyTransferHypothesisToSimulation, computeSimulationTransferBaseline, createTransferHypothesisRecord, createTransferRowRecord, serializeTransferHypothesis } from "./model.js";
-import { alignTransferColumns, getFinalists, serializeSimulation } from "../utils/simulationEngine.js";
+import { alignTransferColumns, getFinalists } from "../utils/simulationEngine.js";
 import { normalizeCandidateName } from "../utils/candidateNames.js";
 
 export const simulationApi = {
@@ -20,7 +20,7 @@ export const simulationApi = {
     const state = loadState();
     const simulation = findSimulation(state, simulationId ?? id);
     if (simulationId != null && simulation.election_id !== Number(id)) throw new Error("Scénario introuvable.");
-    return getSimulationPayload(simulation);
+    return getSimulationPayload(simulation, state);
   },
 
   setSimulationFirstRoundHypothesis: async (electionId, simulationId, hypothesisId) => {
@@ -38,7 +38,7 @@ export const simulationApi = {
       applyHypothesisToSimulation(state, election, simulation, hypothesis);
     }
     saveState(state);
-    return getSimulationPayload(simulation);
+    return getSimulationPayload(simulation, state);
   },
 
   resetSimulationFirstRoundHypothesis: async (electionId, simulationId) => {
@@ -51,7 +51,7 @@ export const simulationApi = {
     const hypothesis = findHypothesis(election, simulation.r1_hypothesis_id);
     applyHypothesisToSimulation(state, election, simulation, hypothesis);
     saveState(state);
-    return getSimulationPayload(simulation);
+    return getSimulationPayload(simulation, state);
   },
 
   saveSimulationAsFirstRoundHypothesis: async (electionId, simulationId, candidateValues) => {
@@ -78,7 +78,7 @@ export const simulationApi = {
     saveState(state);
     return {
       hypothesis: { ...hypothesis, candidates: hypothesis.candidates.map((candidate) => ({ ...candidate })) },
-      simulation: getSimulationPayload(simulation),
+      simulation: getSimulationPayload(simulation, state),
     };
   },
 
@@ -96,7 +96,7 @@ export const simulationApi = {
       applyTransferHypothesisToSimulation(election, simulation, findTransferHypothesis(election, hypothesisId));
     }
     saveState(state);
-    return getSimulationPayload(simulation);
+    return getSimulationPayload(simulation, state);
   },
 
   resetSimulationTransferHypothesis: async (electionId, simulationId) => {
@@ -108,7 +108,7 @@ export const simulationApi = {
     }
     applyTransferHypothesisToSimulation(election, simulation, findTransferHypothesis(election, simulation.r2_hypothesis_id));
     saveState(state);
-    return getSimulationPayload(simulation);
+    return getSimulationPayload(simulation, state);
   },
 
   saveSimulationAsTransferHypothesis: async (electionId, simulationId) => {
@@ -135,7 +135,7 @@ export const simulationApi = {
     saveState(state);
     return {
       hypothesis: serializeTransferHypothesis(hypothesis),
-      simulation: getSimulationPayload(simulation),
+      simulation: getSimulationPayload(simulation, state),
     };
   },
 
@@ -148,7 +148,7 @@ export const simulationApi = {
     const election = electionId == null ? ensureDefaultElection(state) : findElection(state, electionId);
     const simulation = createSimulationRecord(state, election.id, { name: (name || "").trim() || "Nouvelle simulation" });
     saveState(state);
-    return { ...serializeSimulation(simulation), election_id: election.id };
+    return getSimulationPayload(simulation, state);
   },
 
   reorderSimulations: async (electionId, order) => {
@@ -219,7 +219,7 @@ export const simulationApi = {
       });
     }
     saveState(state);
-    return { ...serializeSimulation(copy), election_id: copy.election_id };
+    return getSimulationPayload(copy, state);
   },
 
   deleteSimulation: async (id) => {

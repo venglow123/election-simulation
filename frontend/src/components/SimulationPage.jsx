@@ -16,6 +16,8 @@ import TransferHypothesisModal from "./TransferHypothesisModal.jsx";
 import WarningsPanel from "./WarningsPanel.jsx";
 import TagInput from "./TagInput.jsx";
 import TagChip from "./TagChip.jsx";
+import { CandidateColorsProvider } from "../context/CandidateColorsContext.jsx";
+import { applyCandidateColorsToSankey, buildCandidateColorIndex, DEFAULT_ABSTENTION_COLOR } from "../utils/candidateColors.js";
 
 const SAVE_DELAY = 400;
 
@@ -43,6 +45,7 @@ export default function SimulationPage() {
   const [isTransferHypothesisOpen, setIsTransferHypothesisOpen] = useState(false);
   const [transferHypothesis, setTransferHypothesis] = useState(null);
   const [transferError, setTransferError] = useState("");
+  const [abstentionColor, setAbstentionColor] = useState(DEFAULT_ABSTENTION_COLOR);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,8 +53,8 @@ export default function SimulationPage() {
     setFirstRoundHypothesis(null);
     setTransferHypothesis(null);
     setNotFound(false);
-    Promise.all([api.getSimulation(electionId, id), api.listElectionCandidates(electionId), api.listElectionTags(electionId)])
-      .then(async ([data, options, tagList]) => {
+    Promise.all([api.getSimulation(electionId, id), api.listElectionCandidates(electionId), api.listElectionTags(electionId), api.getElection(electionId)])
+      .then(async ([data, options, tagList, election]) => {
         let hypothesis = null;
         if (data.r1_hypothesis_id != null) {
           hypothesis = await api.getElectionHypothesis(electionId, data.r1_hypothesis_id);
@@ -60,6 +63,7 @@ export default function SimulationPage() {
         if (!cancelled) setSim(data);
         if (!cancelled) setCandidateOptions(options);
         if (!cancelled) setTags(tagList);
+        if (!cancelled) setAbstentionColor(election.abstention_color);
         if (!cancelled) setFirstRoundHypothesis(hypothesis);
         if (!cancelled) setTransferHypothesis(r2Hypothesis);
       })
@@ -75,10 +79,11 @@ export default function SimulationPage() {
     async function refreshFromStorage(event) {
       if (event.key !== "election-simulation:v2") return;
       try {
-        const [data, options, tagList] = await Promise.all([
+        const [data, options, tagList, election] = await Promise.all([
           api.getSimulation(electionId, id),
           api.listElectionCandidates(electionId),
           api.listElectionTags(electionId),
+          api.getElection(electionId),
         ]);
         const hypothesis = data.r1_hypothesis_id == null
           ? null
@@ -87,6 +92,7 @@ export default function SimulationPage() {
         setSim(data);
         setCandidateOptions(options);
         setTags(tagList);
+        setAbstentionColor(election.abstention_color);
         setFirstRoundHypothesis(hypothesis);
         setTransferHypothesis(r2Hypothesis);
       } catch {
@@ -110,6 +116,10 @@ export default function SimulationPage() {
       })
       : null
   ), [sim, transferHypothesis, candidateOptions]);
+
+  const sankeyData = useMemo(() => (
+    sim ? applyCandidateColorsToSankey(sim.sankey, sim, buildCandidateColorIndex(candidateOptions), abstentionColor) : null
+  ), [sim, candidateOptions, abstentionColor]);
 
   const saveMetaField = useCallback(
     (field, value) => {
@@ -342,7 +352,14 @@ export default function SimulationPage() {
   if (!sim) return null;
 
   return (
-    <>
+    <CandidateColorsProvider
+      electionId={electionId}
+      candidates={candidateOptions}
+      onCandidatesChange={setCandidateOptions}
+      abstentionColor={abstentionColor}
+      onAbstentionColorChange={setAbstentionColor}
+      onError={(error) => setFirstRoundError(error.message)}
+    >
       <ScenarioHeader
         simulation={sim}
         onFieldChange={saveMetaField}
@@ -420,17 +437,17 @@ export default function SimulationPage() {
           <div className="panel sankey-panel">
             <div className="panel-heading-row">
               <h2>Diagramme de Sankey</h2>
-              {sim.sankey && (
+              {sankeyData && (
                 <button type="button" className="btn-ghost detail-trigger" onClick={() => setIsSankeyDetailOpen(true)}>
                   <span aria-hidden="true">⤢</span> Voir le détail
                 </button>
               )}
             </div>
-            <SankeyDiagram data={sim.sankey} />
+            <SankeyDiagram data={sankeyData} />
           </div>
         </section>
       </div>
-      {isSankeyDetailOpen && <SankeyDetailModal data={sim.sankey} onClose={() => setIsSankeyDetailOpen(false)} />}
+      {isSankeyDetailOpen && sankeyData && <SankeyDetailModal data={sankeyData} onClose={() => setIsSankeyDetailOpen(false)} />}
       {isFirstRoundHypothesisOpen && (
         <FirstRoundHypothesisModal
           electionId={electionId}
@@ -449,6 +466,6 @@ export default function SimulationPage() {
           onClose={closeTransferHypothesisModal}
         />
       )}
-    </>
+    </CandidateColorsProvider>
   );
 }

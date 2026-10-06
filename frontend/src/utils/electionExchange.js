@@ -91,8 +91,13 @@ export function buildElectionPayload(election, simulations) {
     version: ELECTION_VERSION,
     election: {
       name: election.name,
+      ...(isValidTagColor(election.abstention_color) ? { abstention_color: election.abstention_color } : {}),
       tags: election.tags.map((tag) => ({ name: tag.name, color: tag.color })),
-      candidates: election.candidates.map((candidate) => ({ name: candidate.name, party: candidate.party || "" })),
+      candidates: election.candidates.map((candidate) => ({
+        name: candidate.name,
+        party: candidate.party || "",
+        ...(isValidTagColor(candidate.color) ? { color: candidate.color } : {}),
+      })),
       hypotheses: hypotheses.map((hypothesis) => ({
         name: hypothesis.name,
         description: hypothesis.description || "",
@@ -185,6 +190,7 @@ export function validateElectionPayload(payload) {
       return {
         name: requireString(candidate.name, `Le nom du candidat ${index + 1}`, 200),
         party: optionalString(candidate.party, `Le parti du candidat ${index + 1}`, 200),
+        ...(isValidTagColor(candidate.color) ? { color: candidate.color.toLowerCase() } : {}),
       };
     });
 
@@ -282,7 +288,15 @@ export function validateElectionPayload(payload) {
   return {
     format: ELECTION_FORMAT,
     version: ELECTION_VERSION,
-    election: { name, tags, candidates, hypotheses, transfer_hypotheses: transferHypotheses, scenarios },
+    election: {
+      name,
+      ...(isValidTagColor(source.abstention_color) ? { abstention_color: source.abstention_color.toLowerCase() } : {}),
+      tags,
+      candidates,
+      hypotheses,
+      transfer_hypotheses: transferHypotheses,
+      scenarios,
+    },
   };
 }
 

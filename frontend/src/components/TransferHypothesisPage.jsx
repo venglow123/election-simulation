@@ -7,6 +7,8 @@ import Breadcrumbs from "./Breadcrumbs.jsx";
 import ScenarioHeader from "./ScenarioHeader.jsx";
 import TagInput from "./TagInput.jsx";
 import TransferMatrixTable from "./TransferMatrixTable.jsx";
+import { CandidateColorsProvider } from "../context/CandidateColorsContext.jsx";
+import { DEFAULT_ABSTENTION_COLOR } from "../utils/candidateColors.js";
 
 const SAVE_DELAY = 400;
 const KIND_LIST = { candidate: "candidate_transfers", party: "party_transfers" };
@@ -22,6 +24,7 @@ export default function TransferHypothesisPage() {
   const [hypothesis, setHypothesis] = useState(null);
   const [candidateOptions, setCandidateOptions] = useState([]);
   const [tags, setTags] = useState([]);
+  const [abstentionColor, setAbstentionColor] = useState(DEFAULT_ABSTENTION_COLOR);
   const [notFound, setNotFound] = useState(false);
   const [saveError, setSaveError] = useState("");
   const savePrefix = `transfer-hypothesis:${electionId}:${hypothesisId}:`;
@@ -34,11 +37,13 @@ export default function TransferHypothesisPage() {
       api.getElectionTransferHypothesis(electionId, hypothesisId),
       api.listElectionCandidates(electionId),
       api.listElectionTags(electionId),
-    ]).then(([data, options, tagList]) => {
+      api.getElection(electionId),
+    ]).then(([data, options, tagList, electionData]) => {
       if (cancelled) return;
       setHypothesis(data);
       setCandidateOptions(options);
       setTags(tagList);
+      setAbstentionColor(electionData.abstention_color);
     }).catch(() => {
       if (!cancelled) setNotFound(true);
     });
@@ -172,6 +177,14 @@ export default function TransferHypothesisPage() {
   }
 
   return (
+    <CandidateColorsProvider
+      electionId={electionId}
+      candidates={candidateOptions}
+      onCandidatesChange={setCandidateOptions}
+      abstentionColor={abstentionColor}
+      onAbstentionColorChange={setAbstentionColor}
+      onError={(error) => setSaveError(error.message)}
+    >
     <div className="hypothesis-editor-page">
       <Breadcrumbs
         items={location.state?.returnTo
@@ -253,5 +266,6 @@ export default function TransferHypothesisPage() {
         <p className="hint">Choisissez les deux finalistes pour renseigner les matrices de reports.</p>
       )}
     </div>
+    </CandidateColorsProvider>
   );
 }
