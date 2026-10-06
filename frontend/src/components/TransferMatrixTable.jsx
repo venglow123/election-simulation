@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Candidate, { Abstention } from "./Candidate.jsx";
 import CandidateAutocomplete from "./CandidateAutocomplete.jsx";
 import EditableTable from "./EditableTable.jsx";
 
@@ -27,6 +28,10 @@ export default function TransferMatrixTable({
 }) {
   const [draft, setDraft] = useState({ key: "", pct_to_a: "", pct_to_b: "" });
   const tableRows = abstention ? [{ id: ABSTENTION_ROW_ID, ...abstention }, ...rows] : rows;
+
+  function withCandidate(name, content, editable = true) {
+    return keyField === "name" ? <Candidate name={name} editable={editable}>{content}</Candidate> : content;
+  }
 
   function submitDraft(selectedKey) {
     const key = (typeof selectedKey === "string" ? selectedKey : draft.key).trim();
@@ -57,15 +62,15 @@ export default function TransferMatrixTable({
       key: "key",
       label: keyLabel,
       render: (row) => (row.id === ABSTENTION_ROW_ID ? (
-        <span className="candidate-name-cell">Abstentionnistes 1er tour</span>
-      ) : (
+        <Abstention><span className="candidate-name-cell">Abstentionnistes 1er tour</span></Abstention>
+      ) : withCandidate(row[keyField], (
         <CandidateAutocomplete
           value={row[keyField]}
           options={options}
           ariaLabel={keyLabel}
           onChange={(value) => onFieldChange(row.id, keyField, value)}
         />
-      )),
+      ))),
     },
     { key: "pct_to_a", label: `% vers ${finalistA || "finaliste A"}`, render: (row) => renderPctInput(row, "pct_to_a") },
     { key: "pct_to_b", label: `% vers ${finalistB || "finaliste B"}`, render: (row) => renderPctInput(row, "pct_to_b") },
@@ -104,7 +109,7 @@ export default function TransferMatrixTable({
         rows={tableRows}
         getRowKey={(row) => row.id}
         renderDraftCell={(column) => {
-          if (column.key === "key") return (
+          if (column.key === "key") return withCandidate(draft.key, (
             <CandidateAutocomplete
               value={draft.key}
               options={options}
@@ -113,7 +118,7 @@ export default function TransferMatrixTable({
               onChange={(key) => setDraft((current) => ({ ...current, key }))}
               onEnterCommit={submitDraft}
             />
-          );
+          ), false);
           if (column.key === "pct_to_a" || column.key === "pct_to_b") return (
             <input
               type="text"

@@ -5,6 +5,7 @@ const PALETTE = [
   "#edc948", "#b07aa1", "#ff9da7", "#9c755f", "#bab0ac",
 ];
 const TOLERANCE = 0.01;
+const DEFAULT_ABSTENTION_COLOR = "#999999";
 
 const round2 = (value) => Math.round(value * 100) / 100;
 // Équivalent du format Python `:g` (6 chiffres significatifs, sans zéros inutiles).
@@ -126,21 +127,24 @@ export function computeResults(simulation) {
   return result;
 }
 
-export function buildSankeyData(simulation, results) {
+export function buildSankeyData(simulation, results, { colorByName = new Map(), abstentionColor = DEFAULT_ABSTENTION_COLOR } = {}) {
   if (!results.has_finalists) return null;
 
-  const nodesLeft = simulation.candidates.map((candidate, index) => ({
+  const colorOf = (candidate, index) => colorByName.get(candidate.name) || PALETTE[index % PALETTE.length];
+  const colorById = new Map(simulation.candidates.map((candidate, index) => [candidate.id, colorOf(candidate, index)]));
+
+  const nodesLeft = simulation.candidates.map((candidate) => ({
     id: `c${candidate.id}`,
     label: `${candidate.name} (${formatG(candidate.pct_r1)}%)`,
     value: candidateVotesR1(simulation, candidate),
-    color: PALETTE[index % PALETTE.length],
+    color: colorById.get(candidate.id),
   }));
-  nodesLeft.push({ id: "abst1", label: "Abstention 1er tour", value: simulation.abstention_r1, color: "#999999" });
+  nodesLeft.push({ id: "abst1", label: "Abstention 1er tour", value: simulation.abstention_r1, color: abstentionColor });
 
   const nodesRight = [
-    { id: "fa", label: `${results.finalist_a.name} (2e tour)`, value: results.votes_a, color: "#333333" },
-    { id: "fb", label: `${results.finalist_b.name} (2e tour)`, value: results.votes_b, color: "#333333" },
-    { id: "abst2", label: "Abstention 2e tour", value: results.abstention_r2, color: "#999999" },
+    { id: "fa", label: `${results.finalist_a.name} (2e tour)`, value: results.votes_a, color: colorById.get(results.finalist_a.id) },
+    { id: "fb", label: `${results.finalist_b.name} (2e tour)`, value: results.votes_b, color: colorById.get(results.finalist_b.id) },
+    { id: "abst2", label: "Abstention 2e tour", value: results.abstention_r2, color: abstentionColor },
   ];
 
   const links = [];
@@ -161,7 +165,7 @@ export function buildSankeyData(simulation, results) {
 }
 
 // Représentation complète consommée par les composants React (champs éditables + valeurs calculées).
-export function serializeSimulation(simulation) {
+export function serializeSimulation(simulation, colors = {}) {
   const results = computeResults(simulation);
 
   const payload = {
@@ -204,7 +208,7 @@ export function serializeSimulation(simulation) {
     abstention_r2: null,
     participation_r2: null,
     winner_id: null,
-    sankey: buildSankeyData(simulation, results),
+    sankey: buildSankeyData(simulation, results, colors),
   };
 
   if (results.has_finalists) {

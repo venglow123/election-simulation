@@ -7,6 +7,7 @@ import Breadcrumbs from "./Breadcrumbs.jsx";
 import CandidatesTable from "./CandidatesTable.jsx";
 import ScenarioHeader from "./ScenarioHeader.jsx";
 import TagInput from "./TagInput.jsx";
+import { CandidateColorsProvider } from "../context/CandidateColorsContext.jsx";
 
 const SAVE_DELAY = 400;
 
@@ -128,6 +129,12 @@ export default function HypothesisPage() {
   if (!hypothesis) return null;
 
   return (
+    <CandidateColorsProvider
+      electionId={electionId}
+      candidates={candidateOptions}
+      onCandidatesChange={setCandidateOptions}
+      onError={(error) => setSaveError(error.message)}
+    >
     <div className="hypothesis-editor-page">
       <Breadcrumbs
         items={location.state?.returnTo
@@ -168,5 +175,6 @@ export default function HypothesisPage() {
         showVotes={false}
       />
     </div>
+    </CandidateColorsProvider>
   );
 }

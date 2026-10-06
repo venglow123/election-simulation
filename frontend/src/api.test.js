@@ -170,6 +170,58 @@ test("les scénarios et le référentiel de candidats restent isolés par élect
   assert.equal((await api.listElectionCandidates(firstElection.id))[0].usage_count, 1);
 });
 
+test("les candidats reçoivent une couleur par défaut, modifiable et reprise par le Sankey", async () => {
+  resetStorage();
+  const election = await api.createElection("Couleurs");
+  const simulation = await api.createSimulation(election.id, "Duel");
+  await api.addCandidate(simulation.id, { name: "Alice", pct_r1: 60 });
+  await api.addCandidate(simulation.id, { name: "Bob", pct_r1: 40 });
+
+  const [alice, bob] = await api.listElectionCandidates(election.id);
+  assert.match(alice.color, /^#[0-9a-f]{6}$/);
+  assert.match(bob.color, /^#[0-9a-f]{6}$/);
+  assert.notEqual(alice.color, bob.color);
+
+  await api.setElectionCandidateColor(election.id, "Alice", "#ABCDEF");
+  await api.updateElectionCandidate(election.id, bob.id, { color: "#123456" });
+  await assert.rejects(api.updateElectionCandidate(election.id, bob.id, { color: "rouge" }), /Couleur/);
+
+  const loaded = await api.getSimulation(election.id, simulation.id);
+  const nodeColor = (id) => [...loaded.sankey.nodesLeft, ...loaded.sankey.nodesRight].find((node) => node.id === id).color;
+  const [aliceRow, bobRow] = loaded.candidates;
+  assert.equal(nodeColor(`c${aliceRow.id}`), "#abcdef");
+  assert.equal(nodeColor(`c${bobRow.id}`), "#123456");
+  assert.equal(nodeColor("fa"), "#abcdef");
+  assert.equal(nodeColor("fb"), "#123456");
+
+  const imported = await api.importElection(await api.exportElection(election.id));
+  assert.deepEqual(
+    (await api.listElectionCandidates(imported.id)).map((candidate) => [candidate.name, candidate.color]),
+    [["Alice", "#abcdef"], ["Bob", "#123456"]]
+  );
+});
+
+test("la couleur des abstentionnistes est configurable et reprise par le Sankey", async () => {
+  resetStorage();
+  const election = await api.createElection("Abstention");
+  assert.equal((await api.getElection(election.id)).abstention_color, "#999999");
+  const simulation = await api.createSimulation(election.id, "Duel");
+  await api.addCandidate(simulation.id, { name: "Alice", pct_r1: 60 });
+  await api.addCandidate(simulation.id, { name: "Bob", pct_r1: 40 });
+
+  await api.setElectionAbstentionColor(election.id, "#ABC123");
+  await assert.rejects(api.setElectionAbstentionColor(election.id, "gris"), /Couleur/);
+  assert.equal((await api.getElection(election.id)).abstention_color, "#abc123");
+
+  const loaded = await api.getSimulation(election.id, simulation.id);
+  const nodeColor = (id) => [...loaded.sankey.nodesLeft, ...loaded.sankey.nodesRight].find((node) => node.id === id).color;
+  assert.equal(nodeColor("abst1"), "#abc123");
+  assert.equal(nodeColor("abst2"), "#abc123");
+
+  const imported = await api.importElection(await api.exportElection(election.id));
+  assert.equal((await api.getElection(imported.id)).abstention_color, "#abc123");
+});
+
 test("le référentiel retire un candidat supprimé ou remplacé seulement sans autre usage", async () => {
   resetStorage();
   const election = await api.createElection("Municipales");

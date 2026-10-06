@@ -1,4 +1,5 @@
 import { isValidTagColor, TAG_PALETTE } from "../utils/tags.js";
+import { DEFAULT_ABSTENTION_COLOR, getAbstentionColor, isValidCandidateColor, pickCandidateColor } from "../utils/candidateColors.js";
 import { alignTransferColumns } from "../utils/simulationEngine.js";
 
 const STORAGE_KEY = "election-simulation:v2";
@@ -53,13 +54,20 @@ function normalizeElection(election, index) {
     id: Number(election.id) || index + 1,
     name: String(election.name || "Nouvelle élection"),
     position: Number.isFinite(Number(election.position)) ? Number(election.position) : index + 1,
+    abstention_color: getAbstentionColor(election).toLowerCase(),
     tags,
-    candidates: Array.isArray(election.candidates) ? election.candidates.map((candidate, candidateIndex) => ({
-      ...candidate,
-      id: Number(candidate.id) || candidateIndex + 1,
-      name: String(candidate.name || ""),
-      party: String(candidate.party || ""),
-    })) : [],
+    candidates: Array.isArray(election.candidates) ? election.candidates.reduce((candidates, candidate, candidateIndex) => {
+      candidates.push({
+        ...candidate,
+        id: Number(candidate.id) || candidateIndex + 1,
+        name: String(candidate.name || ""),
+        party: String(candidate.party || ""),
+        color: isValidCandidateColor(candidate.color)
+          ? String(candidate.color).toLowerCase()
+          : pickCandidateColor(candidates.map((item) => item.color)),
+      });
+      return candidates;
+    }, []) : [],
     hypotheses: Array.isArray(election.hypotheses) ? election.hypotheses.map((hypothesis, hypothesisIndex) => ({
       ...hypothesis,
       id: Number(hypothesis.id) || hypothesisIndex + 1,
@@ -142,6 +150,7 @@ function normalizeState(raw) {
       hypotheses: [],
       transfer_hypotheses: [],
       tags: [],
+      abstention_color: DEFAULT_ABSTENTION_COLOR,
     };
     const candidateNames = new Set();
     for (const simulation of unassigned) {
@@ -150,7 +159,12 @@ function normalizeState(raw) {
         const name = String(candidate.name || "").trim();
         if (!name || candidateNames.has(name)) continue;
         candidateNames.add(name);
-        election.candidates.push({ id: state.nextElectionCandidateId++, name, party: "" });
+        election.candidates.push({
+          id: state.nextElectionCandidateId++,
+          name,
+          party: "",
+          color: pickCandidateColor(election.candidates.map((item) => item.color)),
+        });
       }
     }
     state.elections.push(election);

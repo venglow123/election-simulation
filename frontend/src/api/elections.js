@@ -12,6 +12,7 @@ import {
   getElectionCandidateUsageCount,
 } from "./model.js";
 import { isValidTagColor, normalizeTagName, pickTagColor } from "../utils/tags.js";
+import { DEFAULT_ABSTENTION_COLOR, getAbstentionColor, isValidCandidateColor } from "../utils/candidateColors.js";
 import { buildElectionPayload, validateElectionPayload } from "../utils/electionExchange.js";
 
 function serializeTags(election) {
@@ -49,6 +50,7 @@ export const electionApi = {
     const election = findElection(state, id);
     return {
       ...election,
+      abstention_color: getAbstentionColor(election),
       scenarios_count: state.simulations.filter((simulation) => simulation.election_id === election.id).length,
     };
   },
@@ -63,10 +65,20 @@ export const electionApi = {
       hypotheses: [],
       transfer_hypotheses: [],
       tags: [],
+      abstention_color: DEFAULT_ABSTENTION_COLOR,
     };
     state.elections.push(election);
     saveState(state);
     return { ...election, scenarios_count: 0 };
+  },
+
+  setElectionAbstentionColor: async (id, color) => {
+    if (!isValidCandidateColor(color)) throw new Error("Couleur des abstentionnistes invalide.");
+    const state = loadState();
+    const election = findElection(state, id);
+    election.abstention_color = color.toLowerCase();
+    saveState(state);
+    return election.abstention_color;
   },
 
   updateElection: async (id, payload) => {
@@ -98,6 +110,7 @@ export const electionApi = {
       hypotheses: [],
       transfer_hypotheses: [],
       tags: [],
+      abstention_color: source.abstention_color || DEFAULT_ABSTENTION_COLOR,
     };
     state.elections.push(election);
 
@@ -107,7 +120,7 @@ export const electionApi = {
       return record.id;
     });
     for (const candidate of source.candidates) {
-      registerElectionCandidate(state, election.id, candidate.name, candidate.party);
+      registerElectionCandidate(state, election.id, candidate.name, candidate.party, candidate.color);
     }
 
     // Les références entre entités sont transmises par index : on les retraduit en identifiants locaux.
@@ -209,7 +222,18 @@ export const electionApi = {
     if (election.candidates.some((candidate) => candidate.name === name)) {
       throw new Error("Ce candidat existe déjà dans cette élection.");
     }
-    registerElectionCandidate(state, election.id, name, payload.party);
+    registerElectionCandidate(state, election.id, name, payload.party, payload.color);
+    saveState(state);
+    return electionApi.listElectionCandidates(election.id);
+  },
+
+  setElectionCandidateColor: async (electionId, name, color) => {
+    if (!isValidCandidateColor(color)) throw new Error("Couleur de candidat invalide.");
+    const state = loadState();
+    const election = findElection(state, electionId);
+    const candidate = registerElectionCandidate(state, election.id, name);
+    if (!candidate) throw new Error("Le nom du candidat est obligatoire.");
+    candidate.color = color.toLowerCase();
     saveState(state);
     return electionApi.listElectionCandidates(election.id);
   },
@@ -248,6 +272,10 @@ export const electionApi = {
         }
       }
       if ("party" in payload) candidate.party = (payload.party || "").trim();
+      if ("color" in payload) {
+        if (!isValidCandidateColor(payload.color)) throw new Error("Couleur de candidat invalide.");
+        candidate.color = payload.color.toLowerCase();
+      }
     });
     saveState(state);
     return electionApi.listElectionCandidates(election.id);

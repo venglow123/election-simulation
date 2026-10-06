@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { useGridNavigation } from "../hooks/useGridNavigation.js";
 import { describeTransferSource } from "../utils/transferHypothesis.js";
+import Candidate, { Abstention } from "./Candidate.jsx";
 
 function abstentionPct(a, b) {
   const av = parseFloat(String(a).replace(",", ".")) || 0;
@@ -78,7 +79,7 @@ export default function TransfersTable({
         </thead>
         <tbody>
           <tr className="abstention-row">
-            <td>Abstentionnistes 1er tour</td>
+            <td><Abstention><span className="candidate-name">Abstentionnistes 1er tour</span></Abstention></td>
             <td>
               <input
                 type="text"
@@ -107,7 +108,7 @@ export default function TransfersTable({
             return (
               <tr key={c.id} className={expected?.source === "none" ? "transfer-uncovered" : ""}>
                 <td className="candidate-name-cell">
-                  {c.name}
+                  <Candidate name={c.name} />
                   {expected && <span className="transfer-source">{describeTransferSource(expected)}</span>}
                 </td>
                 <td>
