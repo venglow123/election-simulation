@@ -4,6 +4,7 @@ import { api } from "../api.js";
 import { useSimulations } from "../context/SimulationsContext.jsx";
 import Breadcrumbs from "./Breadcrumbs.jsx";
 import EditableTable from "./EditableTable.jsx";
+import ReorderableList from "./ReorderableList.jsx";
 import TagChip from "./TagChip.jsx";
 import { pickTagColor } from "../utils/tags.js";
 import { DEFAULT_ABSTENTION_COLOR, FALLBACK_CANDIDATE_COLOR, pickCandidateColor } from "../utils/candidateColors.js";
@@ -248,17 +249,35 @@ export default function ElectionSettingsPage() {
     }
   }
 
-  function renderHypothesisList(items, pathSegment, summarize, onDelete) {
+  async function handleReorderHypotheses(order) {
+    await api.reorderElectionHypotheses(election.id, order);
+    setHypotheses(await api.listElectionHypotheses(election.id));
+  }
+
+  async function handleReorderTransferHypotheses(order) {
+    await api.reorderElectionTransferHypotheses(election.id, order);
+    setTransferHypotheses(await api.listElectionTransferHypotheses(election.id));
+  }
+
+  function renderHypothesisList(items, pathSegment, summarize, onDelete, onReorder) {
     return (
-      <ul className="hypothesis-settings-list">
-        {items.map((hypothesis) => {
+      <ReorderableList
+        className="hypothesis-settings-list"
+        itemClassName="hypothesis-settings-row"
+        items={items}
+        getItemKey={(hypothesis) => hypothesis.id}
+        getItemLabel={(hypothesis) => hypothesis.name}
+        onReorder={onReorder}
+        scopeKey={`${election.id}:${pathSegment}`}
+        renderItem={(hypothesis) => {
           const summary = summarize(hypothesis);
           return (
-            <li key={hypothesis.id} className="hypothesis-settings-row">
+            <>
               <NavLink
                 className="hypothesis-settings-link"
                 to={`/elections/${election.id}/${pathSegment}/${hypothesis.id}`}
                 aria-label={`Modifier l'hypothèse ${hypothesis.name}`}
+                draggable={false}
               >
                 <span className="hypothesis-settings-main">
                   <span className="hypothesis-settings-name">{hypothesis.name}</span>
@@ -282,10 +301,10 @@ export default function ElectionSettingsPage() {
               >
                 ✕
               </button>
-            </li>
+            </>
           );
-        })}
-      </ul>
+        }}
+      />
     );
   }
 
@@ -446,7 +465,7 @@ export default function ElectionSettingsPage() {
         {hypothesisError && <p className="form-error">{hypothesisError}</p>}
         {hypotheses.length === 0 ? (
           <p className="hint">Aucune hypothèse enregistrée pour cette élection.</p>
-        ) : renderHypothesisList(hypotheses, "hypotheses", summarizeFirstRoundHypothesis, handleDeleteHypothesis)}
+        ) : renderHypothesisList(hypotheses, "hypotheses", summarizeFirstRoundHypothesis, handleDeleteHypothesis, handleReorderHypotheses)}
       </section>
       <section className="panel election-settings-panel">
         <div className="panel-heading-row">
@@ -461,7 +480,7 @@ export default function ElectionSettingsPage() {
         {transferHypothesisError && <p className="form-error">{transferHypothesisError}</p>}
         {transferHypotheses.length === 0 ? (
           <p className="hint">Aucune hypothèse de report enregistrée pour cette élection.</p>
-        ) : renderHypothesisList(transferHypotheses, "transfer-hypotheses", summarizeTransferHypothesis, handleDeleteTransferHypothesis)}
+        ) : renderHypothesisList(transferHypotheses, "transfer-hypotheses", summarizeTransferHypothesis, handleDeleteTransferHypothesis, handleReorderTransferHypotheses)}
       </section>
       <section className="panel election-danger-zone">
         <div>

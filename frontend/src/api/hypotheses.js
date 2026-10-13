@@ -1,8 +1,18 @@
 import { loadState, saveState } from "./storage.js";
 import { toFloat, findHypothesis, findHypothesisCandidate, findElection, registerElectionCandidate, removeUnusedElectionCandidate, createCandidateRecord, createHypothesisRecord, createHypothesisCandidateRecord, detachHypothesisFromSimulation, syncUpdatedHypothesisCandidate } from "./model.js";
 import { normalizeCandidateName } from "../utils/candidateNames.js";
+import { inheritCandidateOrder, reorderCandidates } from "../utils/candidateOrder.js";
+import { setRecordPositions } from "./model.js";
 
 export const hypothesisApi = {
+  reorderElectionHypotheses: async (electionId, order) => {
+    const state = loadState();
+    const election = findElection(state, electionId);
+    setRecordPositions(election.hypotheses, order);
+    saveState(state);
+    return { status: "ok" };
+  },
+
   listElectionHypotheses: async (electionId) => {
     const election = findElection(loadState(), electionId);
     return [...election.hypotheses]
@@ -71,6 +81,20 @@ export const hypothesisApi = {
     return { status: "ok" };
   },
 
+  reorderHypothesisCandidates: async (electionId, hypothesisId, order) => {
+    const state = loadState();
+    const election = findElection(state, electionId);
+    const hypothesis = findHypothesis(election, hypothesisId);
+    hypothesis.candidates = reorderCandidates(hypothesis.candidates, order);
+    for (const simulation of state.simulations.filter((item) => (
+      item.election_id === election.id && item.r1_hypothesis_id === hypothesis.id && !item.r1_order_override
+    ))) {
+      inheritCandidateOrder(simulation, hypothesis);
+    }
+    saveState(state);
+    return { ...hypothesis, candidates: hypothesis.candidates.map((candidate) => ({ ...candidate })) };
+  },
+
   addHypothesisCandidate: async (electionId, hypothesisId, payload) => {
     const state = loadState();
     const election = findElection(state, electionId);
@@ -99,6 +123,7 @@ export const hypothesisApi = {
         ...candidate,
         hypothesis_candidate_id: candidate.id,
       });
+      if (!simulation.r1_order_override) inheritCandidateOrder(simulation, hypothesis);
     }
     saveState(state);
     return { ...hypothesis, candidates: hypothesis.candidates.map((candidate) => ({ ...candidate })) };

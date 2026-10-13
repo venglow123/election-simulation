@@ -39,6 +39,7 @@ const payload = {
         abstention_to_a: 10,
         abstention_to_b: 20,
         r1_hypothesis: 0,
+        r1_order_override: false,
         r1_tags: [],
         r2_tags: [],
         r1_excluded: [1],
@@ -91,4 +92,12 @@ test("un format étranger est rejeté", () => {
     () => validateElectionPayload({ ...payload, format: "report-voix-elections/scenario" }),
     /élection partagée/
   );
+});
+
+test("l'ordre personnalisé est conservé et les anciens exports héritent de l'ordre", () => {
+  const custom = structuredClone(payload);
+  custom.election.scenarios[0].r1_order_override = true;
+  assert.equal(decodeElectionContent(encodeElectionContent(custom)).election.scenarios[0].r1_order_override, true);
+  delete custom.election.scenarios[0].r1_order_override;
+  assert.equal(validateElectionPayload(custom).election.scenarios[0].r1_order_override, false);
 });

@@ -179,6 +179,7 @@ export function serializeSimulation(simulation, colors = {}) {
     abstention_to_a: simulation.abstention_to_a,
     abstention_to_b: simulation.abstention_to_b,
     r1_hypothesis_id: simulation.r1_hypothesis_id ?? null,
+    r1_order_override: Boolean(simulation.r1_order_override),
     r2_hypothesis_id: simulation.r2_hypothesis_id ?? null,
     r1_tag_ids: [...(simulation.r1_tag_ids || [])],
     r2_tag_ids: [...(simulation.r2_tag_ids || [])],

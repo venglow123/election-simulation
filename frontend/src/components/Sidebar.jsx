@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { NavLink, useMatch, useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { useSimulations } from "../context/SimulationsContext.jsx";
@@ -14,7 +14,6 @@ export default function Sidebar() {
   const electionId = Number(electionMatch?.params.electionId) || null;
   const simulationId = simulationMatch?.params.simulationId;
   const navigate = useNavigate();
-  const [draggedId, setDraggedId] = useState(null);
 
   useEffect(() => {
     if (electionId) selectElection(electionId).catch(() => navigate("/", { replace: true }));
@@ -34,17 +33,7 @@ export default function Sidebar() {
     if (String(simId) === simulationId) navigate(`/elections/${electionId}`);
   }
 
-  async function handleDrop(targetId) {
-    if (draggedId == null || draggedId === targetId) {
-      setDraggedId(null);
-      return;
-    }
-    const order = simulations.map((s) => s.id);
-    const fromIndex = order.indexOf(draggedId);
-    const toIndex = order.indexOf(targetId);
-    order.splice(fromIndex, 1);
-    order.splice(toIndex, 0, draggedId);
-    setDraggedId(null);
+  async function handleReorder(order) {
     await api.reorderSimulations(electionId, order);
     await refresh();
   }
@@ -57,6 +46,11 @@ export default function Sidebar() {
         title="Scénarios"
         items={simulations}
         getItemKey={(sim) => sim.id}
+        getItemLabel={(sim) => sim.name}
+        itemClassName={(sim) => `sim-tab ${String(sim.id) === simulationId ? "active" : ""}`}
+        handleClassName="sim-tab-handle"
+        scopeKey={electionId}
+        onReorder={handleReorder}
         emptyMessage="Aucun scénario pour l'instant."
         listClassName="sim-tabs"
         emptyClassName="sim-tabs-empty"
@@ -73,19 +67,8 @@ export default function Sidebar() {
           </button>
         }
         renderItem={(sim) => (
-          <div
-            className={`sim-tab ${String(sim.id) === simulationId ? "active" : ""} ${
-              draggedId === sim.id ? "dragging" : ""
-            }`}
-            draggable
-            onDragStart={() => setDraggedId(sim.id)}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={() => handleDrop(sim.id)}
-          >
-            <span className="sim-tab-handle" title="Glisser pour réordonner">
-              ⠿
-            </span>
-            <NavLink to={`/elections/${electionId}/simulations/${sim.id}`} className="sim-tab-link">
+          <>
+            <NavLink to={`/elections/${electionId}/simulations/${sim.id}`} className="sim-tab-link" draggable={false}>
               <span className="sim-tab-name">{sim.name}</span>
               <span className="sim-tab-meta" title={`${sim.candidates_count} candidat${sim.candidates_count !== 1 ? "s" : ""}`}>
                 {sim.candidates_count}
@@ -96,7 +79,7 @@ export default function Sidebar() {
                 ✕
               </button>
             </div>
-          </div>
+          </>
         )}
       />
       <footer className="sidebar-version" aria-label={`Version ${__APP_VERSION__}`}>

@@ -133,6 +133,7 @@ export function buildElectionPayload(election, simulations) {
           abstention_to_a: simulation.abstention_to_a,
           abstention_to_b: simulation.abstention_to_b,
           r1_hypothesis: r1Hypothesis,
+          r1_order_override: r1Hypothesis != null && Boolean(simulation.r1_order_override),
           r1_tags: toTagIndexes(simulation.r1_tag_ids || []),
           r2_tags: toTagIndexes(simulation.r2_tag_ids || []),
           r1_excluded: r1Hypothesis == null
@@ -255,6 +256,7 @@ export function validateElectionPayload(payload) {
         abstention_to_a: requirePct(scenario.abstention_to_a, `Le report des abstentionnistes vers A de ${label}`),
         abstention_to_b: requirePct(scenario.abstention_to_b, `Le report des abstentionnistes vers B de ${label}`),
         r1_hypothesis: r1Hypothesis,
+        r1_order_override: r1Hypothesis != null && Boolean(scenario.r1_order_override),
         r1_tags: toTags(scenario.r1_tags, `Les tags du premier tour de ${label}`),
         r2_tags: toTags(scenario.r2_tags, `Les tags des reports de ${label}`),
         r1_excluded: [...new Set(

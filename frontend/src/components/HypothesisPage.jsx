@@ -45,7 +45,7 @@ export default function HypothesisPage() {
   const saveMetaField = useCallback((field, value) => {
     setHypothesis((current) => current ? { ...current, [field]: value } : current);
     debounceByKey(`hypothesis:${electionId}:${hypothesisId}:meta:${field}`, () => {
-      api.updateElectionHypothesis(electionId, hypothesisId, { [field]: value })
+      return api.updateElectionHypothesis(electionId, hypothesisId, { [field]: value })
         .then(() => setSaveError(""))
         .catch((error) => setSaveError(error.message));
     }, SAVE_DELAY);
@@ -59,7 +59,7 @@ export default function HypothesisPage() {
       )),
     } : current);
     debounceByKey(`hypothesis:${electionId}:${hypothesisId}:candidate:${candidateId}:${field}`, () => {
-      api.updateHypothesisCandidate(electionId, hypothesisId, candidateId, { [field]: value })
+      return api.updateHypothesisCandidate(electionId, hypothesisId, candidateId, { [field]: value })
         .then(async () => {
           setSaveError("");
           if (field === "name") setCandidateOptions(await api.listElectionCandidates(electionId));
@@ -109,6 +109,11 @@ export default function HypothesisPage() {
     setHypothesis(updated);
     setCandidateOptions(await api.listElectionCandidates(electionId));
     setSaveError("");
+  }
+
+  async function handleReorderCandidates(order) {
+    await flushDebouncedByPrefix(`hypothesis:${electionId}:${hypothesisId}:`);
+    setHypothesis(await api.reorderHypothesisCandidates(electionId, hypothesisId, order));
   }
 
   async function handleDuplicate() {
@@ -171,6 +176,7 @@ export default function HypothesisPage() {
         onFieldChange={saveCandidateField}
         onCreate={handleCreateCandidate}
         onDelete={handleDeleteCandidate}
+        onReorder={handleReorderCandidates}
         title="Résultats du 1er tour"
         showVotes={false}
       />

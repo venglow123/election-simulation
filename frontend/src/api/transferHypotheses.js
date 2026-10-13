@@ -8,6 +8,7 @@ import {
   serializeTransferHypothesis,
   withTransferHypothesisSync,
   TRANSFER_ROW_KINDS,
+  setRecordPositions,
 } from "./model.js";
 import { normalizeKey } from "../utils/transferHypothesis.js";
 
@@ -40,6 +41,14 @@ function ensureFinalistRows(state, hypothesis) {
 }
 
 export const transferHypothesisApi = {
+  reorderElectionTransferHypotheses: async (electionId, order) => {
+    const state = loadState();
+    const election = findElection(state, electionId);
+    setRecordPositions(election.transfer_hypotheses, order);
+    saveState(state);
+    return { status: "ok" };
+  },
+
   listElectionTransferHypotheses: async (electionId) => {
     const election = findElection(loadState(), electionId);
     return [...election.transfer_hypotheses]

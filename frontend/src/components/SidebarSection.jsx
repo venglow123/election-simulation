@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import ReorderableList from "./ReorderableList.jsx";
 
 export default function SidebarSection({
   title,
@@ -9,6 +9,11 @@ export default function SidebarSection({
   emptyMessage,
   listClassName,
   emptyClassName,
+  onReorder,
+  getItemLabel,
+  itemClassName,
+  handleClassName,
+  scopeKey,
 }) {
   return (
     <>
@@ -16,12 +21,20 @@ export default function SidebarSection({
         <h2 className="sidebar-section-title">{title}</h2>
         <div className="sidebar-section-actions">{actions}</div>
       </div>
-      <nav className={listClassName}>
-        {items.length === 0 && <p className={emptyClassName}>{emptyMessage}</p>}
-        {items.map((item) => (
-          <Fragment key={getItemKey(item)}>{renderItem(item)}</Fragment>
-        ))}
-      </nav>
+      <ReorderableList
+        as="nav"
+        className={listClassName}
+        items={items}
+        getItemKey={getItemKey}
+        getItemLabel={getItemLabel}
+        itemClassName={itemClassName}
+        handleClassName={handleClassName}
+        scopeKey={scopeKey}
+        onReorder={onReorder}
+        renderItem={renderItem}
+        emptyMessage={emptyMessage}
+        emptyClassName={emptyClassName}
+      />
     </>
   );
 }
