@@ -10,6 +10,7 @@ export default function CandidatesTable({
   onFieldChange,
   onCreate,
   onDelete,
+  onReorder,
   title = "Résultats du 1er tour",
   showVotes = true,
   headerActions,
@@ -129,6 +130,8 @@ export default function CandidatesTable({
         columns={columns}
         rows={simulation.candidates}
         getRowKey={(candidate) => candidate.id}
+        getRowLabel={(candidate) => candidate.name}
+        onReorder={onReorder}
         renderDraftCell={(column) => {
           if (column.key === "candidate") return (
             <Candidate name={draft.name} editable={false}>
@@ -167,6 +170,7 @@ export default function CandidatesTable({
         onEnterLastRow={() => submitDraft()}
         footer={(
           <tr>
+            {onReorder && <td className="row-handle-cell" />}
             <td>Total</td>
             <td className={`total-cell ${Math.abs(totalPct - 100) <= 0.01 ? "total-ok" : "total-warn"}`}>
               {totalPct.toFixed(2)}%
@@ -179,6 +183,7 @@ export default function CandidatesTable({
       <p className="hint">
         Cliquez dans une cellule vide en bas du tableau pour ajouter un candidat. Naviguez avec les flèches
         ↑↓←→ ou <kbd>Tab</kbd>, validez une ligne avec <kbd>Entrée</kbd>. Tout est enregistré automatiquement.
+        {onReorder && " Glissez la poignée en début de ligne pour réordonner les candidats (au clavier : Espace, ↑↓, puis Entrée ; Échap pour annuler)."}
       </p>
     </div>
   );

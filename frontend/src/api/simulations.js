@@ -2,6 +2,7 @@ import { loadState, saveState } from "./storage.js";
 import { toFloat, toInt, findSimulation, findCandidate, findHypothesis, findElection, ensureDefaultElection, registerElectionCandidate, removeUnusedElectionCandidate, createSimulationRecord, createCandidateRecord, createHypothesisRecord, createHypothesisCandidateRecord, applyHypothesisToSimulation, detachHypothesisFromSimulation, getSimulationPayload, mutate, findTransferHypothesis, applyTransferHypothesisToSimulation, computeSimulationTransferBaseline, createTransferHypothesisRecord, createTransferRowRecord, serializeTransferHypothesis } from "./model.js";
 import { alignTransferColumns, getFinalists } from "../utils/simulationEngine.js";
 import { normalizeCandidateName } from "../utils/candidateNames.js";
+import { inheritCandidateOrder, reorderCandidates } from "../utils/candidateOrder.js";
 
 export const simulationApi = {
   listSimulations: async (electionId) =>
@@ -66,6 +67,7 @@ export const simulationApi = {
       pct_r1: Math.max(toFloat(candidate.pct_r1, 0), 0),
     }));
     simulation.r1_hypothesis_id = hypothesis.id;
+    simulation.r1_order_override = false;
     simulation.r1_excluded_hypothesis_candidate_ids = [];
     simulation.candidates = simulation.candidates.map((candidate, index) => ({
       ...candidate,
@@ -203,6 +205,7 @@ export const simulationApi = {
       abstention_to_a: original.abstention_to_a,
       abstention_to_b: original.abstention_to_b,
       r1_hypothesis_id: original.r1_hypothesis_id,
+      r1_order_override: original.r1_order_override,
       r1_tag_ids: [...original.r1_tag_ids],
       r1_excluded_hypothesis_candidate_ids: [...original.r1_excluded_hypothesis_candidate_ids],
       r2_hypothesis_id: original.r2_hypothesis_id,
@@ -228,6 +231,25 @@ export const simulationApi = {
     saveState(state);
     return { status: "ok" };
   },
+
+  reorderSimulationCandidates: (id, order) =>
+    mutate(id, (simulation) => {
+      const candidates = reorderCandidates(simulation.candidates, order);
+      if (candidates.some((candidate, index) => candidate.id !== simulation.candidates[index].id)) {
+        simulation.r1_order_override = simulation.r1_hypothesis_id != null;
+      }
+      simulation.candidates = candidates;
+    }),
+
+  resetSimulationCandidateOrder: (id) =>
+    mutate(id, (simulation, state) => {
+      if (simulation.r1_hypothesis_id == null) {
+        throw new Error("Aucune hypothèse n'est sélectionnée pour ce scénario.");
+      }
+      const hypothesis = findHypothesis(findElection(state, simulation.election_id), simulation.r1_hypothesis_id);
+      inheritCandidateOrder(simulation, hypothesis);
+      simulation.r1_order_override = false;
+    }),
 
   addCandidate: (id, data) =>
     mutate(id, (simulation, state) => {

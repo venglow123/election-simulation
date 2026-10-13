@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api.js";
 import { useSimulations } from "../context/SimulationsContext.jsx";
-import { debounceByKey } from "../utils/debounceByKey.js";
+import { debounceByKey, flushDebouncedByPrefix } from "../utils/debounceByKey.js";
 import { buildPartyIndex, computeTransferBaseline, describeTransferCondition } from "../utils/transferHypothesis.js";
 import ScenarioHeader from "./ScenarioHeader.jsx";
 import SettingsPanel from "./SettingsPanel.jsx";
@@ -125,7 +125,7 @@ export default function SimulationPage() {
     (field, value) => {
       setSim((prev) => (prev ? { ...prev, [field]: value } : prev));
       debounceByKey(`meta:${field}`, () => {
-        api.updateSimulation(id, { [field]: value }).then((data) => {
+        return api.updateSimulation(id, { [field]: value }).then((data) => {
           applyState(data);
           refreshSidebar();
         });
@@ -138,7 +138,7 @@ export default function SimulationPage() {
     (field, value) => {
       setSim((prev) => (prev ? { ...prev, [field]: value } : prev));
       debounceByKey(`settings:${field}`, () => {
-        api.updateSimulation(id, { [field]: value }).then(applyState);
+        return api.updateSimulation(id, { [field]: value }).then(applyState);
       }, SAVE_DELAY);
     },
     [id, applyState]
@@ -155,7 +155,7 @@ export default function SimulationPage() {
           : prev
       );
       debounceByKey(`candidate:${candidateId}:${field}`, () => {
-        api.updateCandidate(id, candidateId, { [field]: value }).then(async (data) => {
+        return api.updateCandidate(id, candidateId, { [field]: value }).then(async (data) => {
           applyState(data);
           if (field === "name") setCandidateOptions(await api.listElectionCandidates(electionId));
         });
@@ -177,7 +177,7 @@ export default function SimulationPage() {
           : prev
       );
       debounceByKey(`transfer:${candidateId}:${field}`, () => {
-        api.updateTransfer(id, candidateId, { [field]: value }).then(applyState);
+        return api.updateTransfer(id, candidateId, { [field]: value }).then(applyState);
       }, SAVE_DELAY);
     },
     [id, applyState]
@@ -188,7 +188,7 @@ export default function SimulationPage() {
       const simulationField = field === "pct_to_a" ? "abstention_to_a" : "abstention_to_b";
       setSim((prev) => (prev ? { ...prev, [simulationField]: value } : prev));
       debounceByKey(`abstention:${field}`, () => {
-        api.updateAbstentionTransfer(id, { [field]: value }).then(applyState);
+        return api.updateAbstentionTransfer(id, { [field]: value }).then(applyState);
       }, SAVE_DELAY);
     },
     [id, applyState]
@@ -218,6 +218,26 @@ export default function SimulationPage() {
     applyState(data);
     setCandidateOptions(await api.listElectionCandidates(electionId));
     refreshSidebar();
+  }
+
+  async function flushPendingEdits() {
+    await Promise.all(["candidate:", "transfer:", "abstention:", "settings:", "meta:"]
+      .map((prefix) => flushDebouncedByPrefix(prefix)));
+  }
+
+  async function handleReorderCandidates(order) {
+    await flushPendingEdits();
+    applyState(await api.reorderSimulationCandidates(id, order));
+  }
+
+  async function handleResetCandidateOrder() {
+    try {
+      await flushPendingEdits();
+      applyState(await api.resetSimulationCandidateOrder(id));
+      setFirstRoundError("");
+    } catch (error) {
+      setFirstRoundError(error.message);
+    }
   }
 
   async function handleSelectFirstRoundHypothesis(hypothesisId) {
@@ -379,15 +399,21 @@ export default function SimulationPage() {
             onFieldChange={saveCandidateField}
             onCreate={handleCreateCandidate}
             onDelete={handleDeleteCandidate}
+            onReorder={handleReorderCandidates}
             headerActions={(
               <>
                 <button type="button" className="btn-ghost" onClick={() => setIsFirstRoundHypothesisOpen(true)}>
                   {firstRoundHypothesis ? `Hypothèse : ${firstRoundHypothesis.name}` : "Hypothèse : Custom"}
                 </button>
                 {firstRoundHypothesis ? (
-                  <button type="button" className="btn-ghost" onClick={handleResetFirstRoundHypothesis}>
-                    Réinitialiser
-                  </button>
+                  <>
+                    <button type="button" className="btn-ghost" onClick={handleResetCandidateOrder}>
+                      Reprendre l'ordre de l'hypothèse
+                    </button>
+                    <button type="button" className="btn-ghost" onClick={handleResetFirstRoundHypothesis}>
+                      Réinitialiser
+                    </button>
+                  </>
                 ) : (
                   <button type="button" className="btn-ghost" onClick={handleSaveCurrentAsHypothesis}>
                     Enregistrer comme hypothèse

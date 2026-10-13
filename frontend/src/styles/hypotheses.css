@@ -86,6 +86,11 @@
   background: #f8fafc;
 }
 
+.hypothesis-settings-row > .row-drag-handle {
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+
 .hypothesis-settings-link {
   display: flex;
   flex: 1;
@@ -631,4 +636,3 @@ button.link-button:hover {
   margin-top: 12px;
   cursor: pointer;
 }
-

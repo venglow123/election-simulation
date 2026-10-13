@@ -25,6 +25,10 @@ sur GitHub Pages.
 - Créer plusieurs élections et regrouper les simulations dans des workspaces
 - Gérer le référentiel de candidats et partis de chaque élection
 - Naviguer entre élections et simulations
+- Réordonner les scénarios dans la barre latérale et les hypothèses de premier
+  tour ou de reports dans les paramètres avec les mêmes poignées de
+  glissé/déposé (élément flottant, ligne d'insertion et commandes clavier).
+  Cet ordre est enregistré et conservé lors du partage de l'élection.
 - Afficher les tags des hypothèses sous les titres des deux sections d'un
   scénario. En mode Custom, sélectionner, créer ou retirer les tags avec le
   même sélecteur que dans l'éditeur d'hypothèses; les tags des hypothèses liées
@@ -38,6 +42,20 @@ sur GitHub Pages.
 - Définir une matrice de reports de voix (par candidat et par abstentionniste
   du 1er tour : % vers chacun des 2 finalistes). L'abstention au 2e tour se
   calcule automatiquement (100% - les 2 reports saisis)
+- Réordonner les candidats en glissant la **poignée en début de ligne**, dans
+  les hypothèses du premier tour et les scénarios : la ligne déplacée flotte
+  au-dessus du tableau et une ligne d'insertion indique où la déposer.
+  Au clavier, saisir la poignée avec **Espace / Entrée**, déplacer avec les
+  **flèches haut / bas**, puis déposer avec **Espace / Entrée** ou annuler
+  avec **Échap**. Un scénario hérite par défaut
+  de l'ordre de son hypothèse et suit ses changements, même si ses pourcentages
+  sont personnalisés. Un réordonnancement local conserve un ordre indépendant,
+  sans modifier la référence ni surligner une différence. **Reprendre l'ordre
+  de l'hypothèse** réactive l'héritage sans effacer les valeurs personnalisées;
+  **Réinitialiser** rétablit aussi les valeurs de référence. Les candidats
+  ajoutés uniquement au scénario restent à la fin de l'ordre hérité; les
+  nouveaux candidats de référence sont ajoutés à la fin d'un ordre personnalisé.
+  Les ordres et leur mode d'héritage sont conservés dans les copies et le partage.
 - Calcul automatique des résultats du 2e tour (voix, %, vainqueur, abstention),
   mis à jour en direct à chaque modification
 - Diagramme de Sankey (SVG, sans dépendance externe) pour visualiser les flux
@@ -232,4 +250,3 @@ La workflow est définie dans `.github/workflows/ci.yml` ; le déploiement dans
 - Le diagramme de Sankey est un composant React/SVG fait maison (pas de
   bibliothèque de graphes externe), suffisant pour visualiser les flux de
   voix sans dépendance réseau supplémentaire au runtime.
-

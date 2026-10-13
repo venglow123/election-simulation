@@ -164,6 +164,7 @@ export const electionApi = {
         abstention_to_a: scenario.abstention_to_a,
         abstention_to_b: scenario.abstention_to_b,
         r1_hypothesis_id: hypothesis?.id ?? null,
+        r1_order_override: scenario.r1_order_override,
         r1_tag_ids: scenario.r1_tags.map((index) => tagIds[index]),
         r2_tag_ids: scenario.r2_tags.map((index) => tagIds[index]),
         r1_excluded_hypothesis_candidate_ids: hypothesis

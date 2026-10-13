@@ -16,6 +16,200 @@ function resetStorage() {
   values.clear();
 }
 
+test("hypothesis list order persists independently for both rounds and survives sharing", async () => {
+  resetStorage();
+  const election = await api.createElection("List order");
+  const other = await api.createElection("Other election");
+  for (const [create, update, list, reorder, duplicate] of [
+    ["createElectionHypothesis", "updateElectionHypothesis", "listElectionHypotheses", "reorderElectionHypotheses", "duplicateElectionHypothesis"],
+    ["createElectionTransferHypothesis", "updateElectionTransferHypothesis", "listElectionTransferHypotheses", "reorderElectionTransferHypotheses", "duplicateElectionTransferHypothesis"],
+  ]) {
+    const records = [];
+    for (const name of ["First", "Second", "Third"]) {
+      const record = await api[create](election.id);
+      await api[update](election.id, record.id, { name });
+      records.push(record);
+    }
+    const foreign = await api[create](other.id);
+    const reverse = records.map((item) => item.id).reverse();
+    await api[reorder](election.id, reverse);
+    assert.deepEqual((await api[list](election.id)).map((item) => item.id), reverse);
+    assert.equal((await api[list](other.id))[0].id, foreign.id);
+    const before = values.get("election-simulation:v2");
+    for (const invalid of [[], [records[0].id, records[0].id, records[2].id], [records[0].id, records[1].id, foreign.id]]) {
+      await assert.rejects(api[reorder](election.id, invalid), /exactement une fois/);
+      assert.equal(values.get("election-simulation:v2"), before);
+    }
+    const copy = await api[duplicate](election.id, records[1].id);
+    assert.equal((await api[list](election.id)).at(-1).id, copy.id);
+  }
+  const [first] = await api.listElectionHypotheses(election.id);
+  await api.addHypothesisCandidate(election.id, first.id, { name: "Alice", pct_r1: 60 });
+  await api.addHypothesisCandidate(election.id, first.id, { name: "Bob", pct_r1: 40 });
+  const simulation = await api.createSimulation(election.id, "Linked");
+  await api.setSimulationFirstRoundHypothesis(election.id, simulation.id, first.id);
+  const linked = await api.getSimulation(simulation.id);
+  const hypotheses = await api.listElectionHypotheses(election.id);
+  await api.reorderElectionHypotheses(election.id, hypotheses.map((item) => item.id).reverse());
+  assert.deepEqual(await api.getSimulation(simulation.id), linked);
+
+  const imported = await api.importElection(await api.exportElection(election.id));
+  for (const list of ["listElectionHypotheses", "listElectionTransferHypotheses"]) {
+    assert.deepEqual((await api[list](imported.id)).map((item) => item.name),
+      (await api[list](election.id)).map((item) => item.name));
+  }
+  const [importedSimulation] = await api.listSimulations(imported.id);
+  const importedLinked = await api.getSimulation(importedSimulation.id);
+  const importedReference = await api.getElectionHypothesis(imported.id, importedLinked.r1_hypothesis_id);
+  assert.equal(importedReference.name, first.name);
+  assert.deepEqual(importedLinked.candidates.map((item) => item.name), ["Alice", "Bob"]);
+});
+
+test("candidate order inherits independently from percentages and preserves explicit scenario orders", async () => {
+  resetStorage();
+  const election = await api.createElection("Candidate order");
+  const hypothesis = await api.createElectionHypothesis(election.id);
+  for (const [name, pct_r1] of [["Alice", 50], ["Bob", 30], ["Charlie", 20]]) {
+    await api.addHypothesisCandidate(election.id, hypothesis.id, { name, pct_r1 });
+  }
+  const source = await api.getElectionHypothesis(election.id, hypothesis.id);
+  const sourceIds = source.candidates.map((candidate) => candidate.id);
+  const inherited = await api.createSimulation(election.id, "Inherited");
+  const custom = await api.createSimulation(election.id, "Custom order");
+  const linked = await api.setSimulationFirstRoundHypothesis(election.id, inherited.id, hypothesis.id);
+  const customLinked = await api.setSimulationFirstRoundHypothesis(election.id, custom.id, hypothesis.id);
+  const names = (record) => record.candidates.map((candidate) => candidate.name);
+  assert.deepEqual(names(linked), names(source));
+  assert.equal(linked.r1_order_override, false);
+  const unchanged = await api.reorderSimulationCandidates(inherited.id, linked.candidates.map((candidate) => candidate.id));
+  assert.equal(unchanged.r1_order_override, false);
+
+  await api.updateCandidate(inherited.id, linked.candidates[0].id, { pct_r1: 55 });
+  await api.updateTransfer(inherited.id, linked.candidates[2].id, { pct_to_a: 70, pct_to_b: 20 });
+  const before = await api.getSimulation(inherited.id);
+  const customOrder = customLinked.candidates.map((candidate) => candidate.id).reverse();
+  const reordered = await api.reorderSimulationCandidates(custom.id, customOrder);
+  assert.deepEqual(names(reordered), ["Charlie", "Bob", "Alice"]);
+  assert.equal(reordered.r1_order_override, true);
+  assert.ok(reordered.candidates.every((candidate) => !candidate.r1_pct_override && !candidate.r1_name_override));
+  assert.deepEqual(names(await api.getElectionHypothesis(election.id, hypothesis.id)), ["Alice", "Bob", "Charlie"]);
+
+  await api.reorderHypothesisCandidates(election.id, hypothesis.id, [sourceIds[1], sourceIds[0], sourceIds[2]]);
+  const updated = await api.getSimulation(inherited.id);
+  assert.deepEqual(names(updated), ["Bob", "Alice", "Charlie"]);
+  assert.equal(updated.candidates[1].pct_r1, 55);
+  assert.equal(updated.votes_a, before.votes_a);
+  assert.equal(updated.votes_b, before.votes_b);
+  assert.deepEqual(updated.candidates[2].transfer, before.candidates[2].transfer);
+  assert.deepEqual(names(await api.getSimulation(custom.id)), ["Charlie", "Bob", "Alice"]);
+
+  const copy = await api.duplicateSimulation(custom.id);
+  assert.equal(copy.r1_order_override, true);
+  assert.deepEqual(names(copy), ["Charlie", "Bob", "Alice"]);
+  const hypothesisCopy = await api.duplicateElectionHypothesis(election.id, hypothesis.id);
+  assert.deepEqual(names(hypothesisCopy), ["Bob", "Alice", "Charlie"]);
+  const fresh = await api.createSimulation(election.id, "New linked scenario");
+  const freshLinked = await api.setSimulationFirstRoundHypothesis(election.id, fresh.id, hypothesis.id);
+  assert.deepEqual(names(freshLinked), ["Bob", "Alice", "Charlie"]);
+  assert.equal(freshLinked.r1_order_override, false);
+
+  // Revenir manuellement au même ordre ne réactive pas implicitement l'héritage.
+  await api.reorderSimulationCandidates(custom.id, [
+    customLinked.candidates[1].id, customLinked.candidates[0].id, customLinked.candidates[2].id,
+  ]);
+  await api.reorderHypothesisCandidates(election.id, hypothesis.id, sourceIds);
+  assert.deepEqual(names(await api.getSimulation(custom.id)), ["Bob", "Alice", "Charlie"]);
+  await api.updateCandidate(custom.id, customLinked.candidates[0].id, { pct_r1: 60 });
+  const resetOrder = await api.resetSimulationCandidateOrder(custom.id);
+  assert.equal(resetOrder.r1_order_override, false);
+  assert.deepEqual(names(resetOrder), ["Alice", "Bob", "Charlie"]);
+  assert.equal(resetOrder.candidates[0].pct_r1, 60);
+  await api.reorderHypothesisCandidates(election.id, hypothesis.id, sourceIds.toReversed());
+  assert.deepEqual(names(await api.getSimulation(custom.id)), ["Charlie", "Bob", "Alice"]);
+  const resetAll = await api.resetSimulationFirstRoundHypothesis(election.id, custom.id);
+  assert.equal(resetAll.r1_order_override, false);
+  assert.equal(resetAll.candidates[2].pct_r1, 50);
+
+  const detached = await api.setSimulationFirstRoundHypothesis(election.id, copy.id, null);
+  assert.equal(detached.r1_order_override, false);
+  assert.deepEqual(names(detached), ["Charlie", "Bob", "Alice"]);
+  await api.reorderSimulationCandidates(copy.id, detached.candidates.map((candidate) => candidate.id).reverse());
+  assert.equal((await api.getSimulation(copy.id)).r1_order_override, false);
+  const saved = await api.saveSimulationAsFirstRoundHypothesis(election.id, copy.id);
+  assert.equal(saved.simulation.r1_order_override, false);
+  assert.deepEqual(names(saved.hypothesis), ["Alice", "Bob", "Charlie"]);
+});
+
+test("candidate order preserves exclusions, local additions and inheritance through sharing", async () => {
+  resetStorage();
+  const election = await api.createElection("Order sharing");
+  const hypothesis = await api.createElectionHypothesis(election.id);
+  for (const name of ["Alice", "Bob", "Charlie"]) {
+    await api.addHypothesisCandidate(election.id, hypothesis.id, { name, pct_r1: 30 });
+  }
+  const inherited = await api.createSimulation(election.id, "Inherited");
+  const custom = await api.createSimulation(election.id, "Custom");
+  const linked = await api.setSimulationFirstRoundHypothesis(election.id, inherited.id, hypothesis.id);
+  const customLinked = await api.setSimulationFirstRoundHypothesis(election.id, custom.id, hypothesis.id);
+  await api.deleteCandidate(inherited.id, linked.candidates[1].id);
+  await api.addCandidate(inherited.id, { name: "Local", pct_r1: 10 });
+  await api.reorderSimulationCandidates(custom.id, customLinked.candidates.map((candidate) => candidate.id).reverse());
+  const expanded = await api.addHypothesisCandidate(election.id, hypothesis.id, { name: "Diana", pct_r1: 10 });
+  const order = expanded.candidates.map((candidate) => candidate.id).reverse();
+  await api.reorderHypothesisCandidates(election.id, hypothesis.id, order);
+  const names = (record) => record.candidates.map((candidate) => candidate.name);
+  assert.deepEqual(names(await api.getSimulation(inherited.id)), ["Diana", "Charlie", "Alice", "Local"]);
+  assert.deepEqual(names(await api.getSimulation(custom.id)), ["Charlie", "Bob", "Alice", "Diana"]);
+  await api.deleteHypothesisCandidate(election.id, hypothesis.id, expanded.candidates[2].id);
+  assert.deepEqual(names(await api.getSimulation(custom.id)), ["Bob", "Alice", "Diana"]);
+
+  const payload = await api.exportElection(election.id);
+  const imported = await api.importElection(payload);
+  const summaries = await api.listSimulations(imported.id);
+  const [importedHypothesis] = await api.listElectionHypotheses(imported.id);
+  const importedInherited = await api.getSimulation(summaries.find((item) => item.name === "Inherited").id);
+  const importedCustom = await api.getSimulation(summaries.find((item) => item.name === "Custom").id);
+  assert.equal(importedInherited.r1_order_override, false);
+  assert.equal(importedCustom.r1_order_override, true);
+  assert.deepEqual(names(importedInherited), ["Diana", "Alice", "Local"]);
+  assert.deepEqual(names(importedCustom), ["Bob", "Alice", "Diana"]);
+  await api.reorderHypothesisCandidates(imported.id, importedHypothesis.id,
+    importedHypothesis.candidates.map((candidate) => candidate.id).reverse());
+  assert.deepEqual(names(await api.getSimulation(importedInherited.id)), ["Alice", "Diana", "Local"]);
+  assert.deepEqual(names(await api.getSimulation(importedCustom.id)), ["Bob", "Alice", "Diana"]);
+
+  delete payload.election.scenarios[0].r1_order_override;
+  const legacyImport = await api.importElection(payload);
+  const [legacySummary] = await api.listSimulations(legacyImport.id);
+  assert.equal((await api.getSimulation(legacySummary.id)).r1_order_override, false);
+  const raw = JSON.parse(values.get("election-simulation:v2"));
+  delete raw.simulations.find((item) => item.id === inherited.id).r1_order_override;
+  values.set("election-simulation:v2", JSON.stringify(raw));
+  assert.equal((await api.getSimulation(inherited.id)).r1_order_override, false);
+});
+
+test("candidate reorder rejects partial, duplicate and foreign identifiers without saving", async () => {
+  resetStorage();
+  const election = await api.createElection("Order validation");
+  const simulation = await api.createSimulation(election.id, "Scenario");
+  const hypothesis = await api.createElectionHypothesis(election.id);
+  await api.addCandidate(simulation.id, { name: "Alice", pct_r1: 100 });
+  const source = await api.addHypothesisCandidate(election.id, hypothesis.id, { name: "Alice", pct_r1: 100 });
+  const current = await api.getSimulation(simulation.id);
+  const before = values.get("election-simulation:v2");
+  for (const order of [null, [], [999], [current.candidates[0].id, current.candidates[0].id]]) {
+    await assert.rejects(api.reorderSimulationCandidates(simulation.id, order), /exactement une fois/);
+    assert.equal(values.get("election-simulation:v2"), before);
+  }
+  for (const order of [[], [999], [source.candidates[0].id, source.candidates[0].id]]) {
+    await assert.rejects(api.reorderHypothesisCandidates(election.id, hypothesis.id, order), /exactement une fois/);
+    assert.equal(values.get("election-simulation:v2"), before);
+  }
+  const noChange = await api.reorderSimulationCandidates(simulation.id, current.candidates.map((candidate) => candidate.id));
+  assert.equal(noChange.r1_order_override, false);
+  await assert.rejects(api.resetSimulationCandidateOrder(simulation.id), /Aucune hypothèse/);
+});
+
 test("Custom round tags persist independently and follow duplication and hypothesis creation", async () => {
   resetStorage();
 

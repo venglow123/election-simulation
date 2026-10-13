@@ -2,6 +2,12 @@ import { getFinalists, serializeSimulation } from "../utils/simulationEngine.js"
 import { buildPartyIndex, computeTransferBaseline } from "../utils/transferHypothesis.js";
 import { loadState, saveState } from "./storage.js";
 import { buildCandidateColorIndex, DEFAULT_ABSTENTION_COLOR, getAbstentionColor, isValidCandidateColor, pickCandidateColor } from "../utils/candidateColors.js";
+import { reorderCandidates } from "../utils/candidateOrder.js";
+
+export function setRecordPositions(records, order) {
+  const ordered = reorderCandidates(records, order);
+  ordered.forEach((record, index) => { record.position = index + 1; });
+}
 
 export function toFloat(value, fallback = 0) {
   const parsed = Number(String(value).replace(",", "."));
@@ -133,6 +139,7 @@ export function createSimulationRecord(state, electionId, fields) {
     abstention_to_a: 0,
     abstention_to_b: 0,
     r1_hypothesis_id: null,
+    r1_order_override: false,
     r1_tag_ids: [],
     r1_excluded_hypothesis_candidate_ids: [],
     r2_hypothesis_id: null,
@@ -211,11 +218,13 @@ export function applyHypothesisToSimulation(state, election, simulation, hypothe
     return candidate;
   });
   simulation.r1_hypothesis_id = hypothesis.id;
+  simulation.r1_order_override = false;
   simulation.r1_excluded_hypothesis_candidate_ids = [];
 }
 
 export function detachHypothesisFromSimulation(simulation) {
   simulation.r1_hypothesis_id = null;
+  simulation.r1_order_override = false;
   simulation.r1_excluded_hypothesis_candidate_ids = [];
   simulation.candidates = simulation.candidates.map((candidate) => ({
     ...candidate,

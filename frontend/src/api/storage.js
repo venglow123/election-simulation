@@ -115,6 +115,7 @@ function normalizeState(raw) {
       election_id: Number.isFinite(Number(simulation.election_id)) ? Number(simulation.election_id) : null,
       position: Number.isFinite(Number(simulation.position)) ? Number(simulation.position) : index + 1,
       r1_tag_ids: Array.isArray(simulation.r1_tag_ids) ? [...new Set(simulation.r1_tag_ids.map(Number))] : [],
+      r1_order_override: simulation.r1_hypothesis_id != null && Boolean(simulation.r1_order_override),
       r2_tag_ids: Array.isArray(simulation.r2_tag_ids) ? [...new Set(simulation.r2_tag_ids.map(Number))] : [],
       r1_hypothesis_id: simulation.r1_hypothesis_id != null && Number.isFinite(Number(simulation.r1_hypothesis_id))
         ? Number(simulation.r1_hypothesis_id)
@@ -238,4 +239,3 @@ export function saveState(state) {
     }
   }
 }
-
