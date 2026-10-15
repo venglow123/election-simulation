@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { api } from "../api.js";
 import HypothesisPickerModal from "./HypothesisPickerModal.jsx";
+import TableScroll from "./TableScroll.jsx";
 
 function getLeaders(hypothesis) {
   return [...hypothesis.candidates]
@@ -25,6 +26,7 @@ function renderDetail(hypothesis) {
         </p>
       )}
       {hypothesis.candidates.length ? (
+        <TableScroll label="Résultats du premier tour">
         <table className="data-table hypothesis-readonly-table">
           <thead><tr><th>Candidat</th><th>% 1er tour</th></tr></thead>
           <tbody>
@@ -36,6 +38,7 @@ function renderDetail(hypothesis) {
             ))}
           </tbody>
         </table>
+        </TableScroll>
       ) : (
         <p className="hint">Cette hypothèse ne contient aucun candidat.</p>
       )}
@@ -63,4 +66,3 @@ export default function FirstRoundHypothesisModal({ electionId, selectedHypothes
     />
   );
 }
-

@@ -25,6 +25,11 @@ sur GitHub Pages.
 - Créer plusieurs élections et regrouper les simulations dans des workspaces
 - Gérer le référentiel de candidats et partis de chaque élection
 - Naviguer entre élections et simulations
+- Interface responsive : navigation repliable et flottante sur mobile et
+  tablette, masquée au défilement vers le bas et réaffichée dès qu'on remonte
+  (elle reste visible lorsque le menu est ouvert), formulaires et fenêtres adaptés aux petits écrans, commandes tactiles
+  agrandies. Les tableaux et le diagramme restent lisibles grâce à leur propre
+  défilement horizontal, sans dupliquer les composants de la version bureau.
 - Réordonner les scénarios dans la barre latérale et les hypothèses de premier
   tour ou de reports dans les paramètres avec les mêmes poignées de
   glissé/déposé (élément flottant, ligne d'insertion et commandes clavier).

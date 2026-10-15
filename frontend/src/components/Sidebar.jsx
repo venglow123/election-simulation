@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { NavLink, useMatch, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { NavLink, useLocation, useMatch, useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { useSimulations } from "../context/SimulationsContext.jsx";
 import SidebarSection from "./SidebarSection.jsx";
@@ -14,6 +14,43 @@ export default function Sidebar() {
   const electionId = Number(electionMatch?.params.electionId) || null;
   const simulationId = simulationMatch?.params.simulationId;
   const navigate = useNavigate();
+  const location = useLocation();
+  const [isOpen, setIsOpen] = useState(false);
+  const [isHidden, setIsHidden] = useState(false);
+
+  useEffect(() => setIsOpen(false), [location.pathname]);
+
+  useEffect(() => {
+    const mobile = window.matchMedia("(max-width: 900px)");
+    function scrollPosition() {
+      const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+      return Math.max(0, Math.min(window.scrollY, maxScroll));
+    }
+    let previousY = scrollPosition();
+    setIsHidden(false);
+
+    function handleScroll() {
+      const nextY = scrollPosition();
+      if (!mobile.matches || isOpen || nextY === 0) {
+        setIsHidden(false);
+      } else if (nextY !== previousY) {
+        setIsHidden(nextY > previousY);
+      }
+      previousY = nextY;
+    }
+
+    function handleResize() {
+      previousY = scrollPosition();
+      setIsHidden(false);
+    }
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [isOpen, location.pathname]);
 
   useEffect(() => {
     if (electionId) selectElection(electionId).catch(() => navigate("/", { replace: true }));
@@ -39,7 +76,33 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="sidebar">
+    <aside
+      className={`sidebar${isHidden && !isOpen ? " is-scroll-hidden" : ""}`}
+      onFocusCapture={() => setIsHidden(false)}
+    >
+      <button
+        type="button"
+        className="mobile-navigation-toggle"
+        aria-expanded={isOpen}
+        aria-controls="sidebar-navigation"
+        onClick={() => setIsOpen((open) => !open)}
+      >
+        <span>Élections & scénarios</span>
+        <span>{isOpen ? "Fermer −" : "Menu +"}</span>
+      </button>
+      <div
+        id="sidebar-navigation"
+        className={`sidebar-content${isOpen ? " is-open" : ""}`}
+        onClick={(event) => {
+          if (event.target.closest("a")) setIsOpen(false);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && !event.defaultPrevented) {
+            setIsOpen(false);
+            event.currentTarget.previousElementSibling.focus();
+          }
+        }}
+      >
       <WorkspaceSelector selectedElectionId={electionId} />
 
       <SidebarSection
@@ -85,6 +148,7 @@ export default function Sidebar() {
       <footer className="sidebar-version" aria-label={`Version ${__APP_VERSION__}`}>
         v{__APP_VERSION__.replace(/^v/, "")}
       </footer>
+      </div>
     </aside>
   );
 }

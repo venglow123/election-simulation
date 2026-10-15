@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { moveGridFocus } from "../hooks/useGridNavigation.js";
 import { normalizeCandidateName } from "../utils/candidateNames.js";
+import AutocompleteList from "./AutocompleteList.jsx";
 
 export default function CandidateAutocomplete({
   value,
@@ -97,7 +98,7 @@ export default function CandidateAutocomplete({
       />
       {invalidMessage && <span id={errorId} className="candidate-input-error" role="tooltip">{invalidMessage}</span>}
       {open && (
-        <ul className="autocomplete-list" role="listbox">
+        <AutocompleteList inputRef={inputRef}>
           {suggestions.map((item, index) => (
             <li key={`${item.type}-${item.name}`}>
               <button
@@ -123,7 +124,7 @@ export default function CandidateAutocomplete({
               </button>
             </li>
           ))}
-        </ul>
+        </AutocompleteList>
       )}
     </div>
   );

@@ -21,6 +21,18 @@
   box-shadow: 2px 0 12px rgba(0, 0, 0, 0.12);
 }
 
+.sidebar-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
+.mobile-navigation-toggle {
+  display: none;
+}
+
 .sidebar-brand {
   display: flex;
   align-items: center;

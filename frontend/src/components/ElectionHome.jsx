@@ -21,7 +21,7 @@ export default function ElectionHome() {
     <div className="empty-state">
       <div className="empty-state-icon">🗳️</div>
       <h1>{election.name}</h1>
-      <p>Aucun scénario dans cette élection. Créez-en un depuis le panneau de gauche.</p>
+      <p>Aucun scénario dans cette élection. Créez-en un depuis le menu de navigation.</p>
     </div>
   );
 }
