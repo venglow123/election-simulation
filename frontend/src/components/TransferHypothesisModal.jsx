@@ -2,6 +2,7 @@ import { useCallback, useMemo } from "react";
 import { api } from "../api.js";
 import { buildPartyIndex, computeTransferBaseline, describeTransferSource, transferConditionMatches } from "../utils/transferHypothesis.js";
 import HypothesisPickerModal from "./HypothesisPickerModal.jsx";
+import TableScroll from "./TableScroll.jsx";
 
 function formatPct(value) {
   return `${Number(value.toFixed(2))}%`;
@@ -51,6 +52,7 @@ export default function TransferHypothesisModal({
         <p className="hypothesis-picker-leaders">
           Aperçu des reports appliqués à ce scénario (candidats prioritaires sur les partis ; lignes non couvertes : 100 % abstention).
         </p>
+        <TableScroll label="Aperçu des reports">
         <table className="data-table hypothesis-readonly-table">
           <thead>
             <tr>
@@ -83,6 +85,7 @@ export default function TransferHypothesisModal({
             })}
           </tbody>
         </table>
+        </TableScroll>
       </>
     );
   }

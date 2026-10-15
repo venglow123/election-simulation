@@ -19,7 +19,7 @@ export default function Home() {
       <div className="empty-state-icon">🗳️</div>
       <h1>Bienvenue</h1>
       <p>
-        Créez votre première élection depuis le panneau de gauche pour y regrouper vos scénarios de simulation.
+        Créez votre première élection depuis le menu de navigation pour y regrouper vos scénarios de simulation.
       </p>
     </div>
   );

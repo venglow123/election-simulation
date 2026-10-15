@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import SankeyDiagram from "./SankeyDiagram.jsx";
+import TableScroll from "./TableScroll.jsx";
 
 const DESTINATION_IDS = ["fa", "fb", "abst2"];
 
@@ -86,7 +87,7 @@ export default function SankeyDetailModal({ data, onClose }) {
             </div>
             <span className="flow-table-legend">Voix (%)</span>
           </div>
-          <div className="detail-table-scroll">
+          <TableScroll label="Détail des reports">
             <table className="data-table flow-detail-table">
               <thead>
                 <tr>
@@ -123,7 +124,7 @@ export default function SankeyDetailModal({ data, onClose }) {
                 </tr>
               </tfoot>
             </table>
-          </div>
+          </TableScroll>
         </div>
       </section>
     </div>

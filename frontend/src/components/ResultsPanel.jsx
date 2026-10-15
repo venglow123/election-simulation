@@ -1,3 +1,5 @@
+import TableScroll from "./TableScroll.jsx";
+
 export default function ResultsPanel({ simulation }) {
   if (!simulation.has_finalists) {
     return (
@@ -13,6 +15,7 @@ export default function ResultsPanel({ simulation }) {
 
   return (
     <>
+      <TableScroll label="Résultats du second tour">
       <table className="data-table results-table">
         <thead>
           <tr>
@@ -34,6 +37,7 @@ export default function ResultsPanel({ simulation }) {
           </tr>
         </tbody>
       </table>
+      </TableScroll>
       <p className="hint">
         Abstention au 2e tour : <strong>{simulation.abstention_r2}</strong> &nbsp;|&nbsp; Participation :{" "}
         <strong>{simulation.participation_r2}</strong>

@@ -2,6 +2,7 @@ import { useRef } from "react";
 import { useGridNavigation } from "../hooks/useGridNavigation.js";
 import { describeTransferSource } from "../utils/transferHypothesis.js";
 import Candidate, { Abstention } from "./Candidate.jsx";
+import TableScroll from "./TableScroll.jsx";
 
 function abstentionPct(a, b) {
   const av = parseFloat(String(a).replace(",", ".")) || 0;
@@ -68,7 +69,8 @@ export default function TransfersTable({
         <p className="hint">Ajoutez au moins 2 candidats pour configurer les reports de voix.</p>
       )}
 
-      <table className="data-table grid-table" ref={tableRef} hidden={!hasFinalists}>
+      <TableScroll label="Reports de voix" hidden={!hasFinalists}>
+      <table className="data-table grid-table" ref={tableRef}>
         <thead>
           <tr>
             <th>Origine (1er tour)</th>
@@ -135,6 +137,7 @@ export default function TransfersTable({
           })}
         </tbody>
       </table>
+      </TableScroll>
     </div>
   );
 }

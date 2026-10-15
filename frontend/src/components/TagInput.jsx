@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { normalizeTagName } from "../utils/tags.js";
 import TagChip from "./TagChip.jsx";
+import AutocompleteList from "./AutocompleteList.jsx";
 
 export default function TagInput({ tags, selectedIds, onAdd, onCreate, onRemove }) {
   const inputRef = useRef(null);
@@ -88,7 +89,7 @@ export default function TagInput({ tags, selectedIds, onAdd, onCreate, onRemove 
           onBlur={() => setIsOpen(false)}
         />
         {open && (
-          <ul className="autocomplete-list" role="listbox">
+          <AutocompleteList inputRef={inputRef}>
             {suggestions.map((item, index) => (
               <li key={item.type === "create" ? "create" : item.tag.id}>
                 <button
@@ -111,7 +112,7 @@ export default function TagInput({ tags, selectedIds, onAdd, onCreate, onRemove 
                 </button>
               </li>
             ))}
-          </ul>
+          </AutocompleteList>
         )}
       </div>
     </div>

@@ -20,6 +20,15 @@
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.14);
 }
 
+.autocomplete-list-floating {
+  z-index: 30;
+}
+
+.autocomplete-option > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .autocomplete-option {
   display: flex;
   justify-content: space-between;

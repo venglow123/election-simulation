@@ -41,6 +41,27 @@
 
 /* ---------- Tableaux ---------- */
 
+.table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.table-scroll[hidden] {
+  display: none;
+}
+
+.table-scroll-hint {
+  margin: 0 0 12px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.table-scroll:focus-visible,
+.sankey-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .data-table {
   width: 100%;
   border-collapse: collapse;
@@ -514,10 +535,6 @@ button:disabled:hover {
   color: var(--text-muted);
   font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
-}
-
-.detail-table-scroll {
-  overflow-x: auto;
 }
 
 .flow-detail-table {

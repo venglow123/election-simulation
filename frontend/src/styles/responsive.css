@@ -1,0 +1,388 @@
+@media (max-width: 900px) {
+  .app-shell {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    position: sticky;
+    z-index: 15;
+    width: 100%;
+    height: auto;
+    max-height: 100vh;
+    max-height: 100dvh;
+    overflow: visible;
+    padding: 8px 16px;
+    gap: 0;
+    transition: transform 0.18s ease;
+  }
+
+  .sidebar.is-scroll-hidden:not(:has(:focus-visible)) {
+    transform: translateY(-100%);
+  }
+
+  .mobile-navigation-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    min-height: 44px;
+    padding: 8px 0;
+    background: transparent;
+    color: #f9fafb;
+    text-align: left;
+    font-weight: 600;
+  }
+
+  .mobile-navigation-toggle:hover {
+    background: transparent;
+    color: #bfdbfe;
+  }
+
+  .sidebar-content {
+    display: none;
+  }
+
+  .sidebar-content.is-open {
+    display: flex;
+    padding: 12px 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+
+  .sim-tabs {
+    flex: none;
+    max-height: 40vh;
+    max-height: 40dvh;
+  }
+
+  .main-area {
+    padding: 24px 20px 48px;
+    overflow-wrap: anywhere;
+  }
+
+  .scenario-title-row {
+    flex-wrap: wrap;
+  }
+
+  .scenario-meta-form {
+    flex-basis: 100%;
+  }
+
+  button,
+  .btn-ghost,
+  .icon-button,
+  .sidebar-icon-button,
+  .workspace-icon-button,
+  .row-delete,
+  .sim-tab-delete button,
+  .row-drag-handle {
+    min-height: 44px;
+  }
+
+  .icon-button,
+  .sidebar-icon-button,
+  .workspace-icon-button,
+  .row-delete,
+  .sim-tab-delete button,
+  .row-drag-handle {
+    min-width: 44px;
+    flex-shrink: 0;
+  }
+
+  .sim-tab-link {
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .sim-tab-delete button {
+    opacity: 1;
+  }
+
+  .workspace-selector-controls {
+    grid-template-columns: minmax(0, 1fr) 44px 44px;
+  }
+
+  .workspace-exchange-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workspace-exchange-button {
+    white-space: normal;
+  }
+
+  /* 16px prevents automatic zoom when focusing form fields on iOS. */
+  :is(input, textarea, select):not([type="color"]):not([type="radio"]):not([type="checkbox"]):not(.scenario-title-input),
+  .data-table input.grid-input,
+  .election-settings-panel .new-row input.grid-input {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 700px) {
+  .main-area {
+    padding: 20px 12px max(32px, env(safe-area-inset-bottom));
+  }
+
+  .panel {
+    min-width: 0;
+    padding: 16px 12px;
+  }
+
+  .content-grid {
+    gap: 16px;
+  }
+
+  .col {
+    gap: 16px;
+  }
+
+  .panel-heading-row,
+  .flow-table-heading {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .panel-heading-row h2 {
+    margin-bottom: 8px;
+  }
+
+  .scenario-title-input {
+    font-size: 1.35rem;
+  }
+
+  .scenario-title-row {
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .settings-form {
+    gap: 12px;
+  }
+
+  .settings-form label {
+    flex: 1 1 200px;
+    min-width: 0;
+  }
+
+  .settings-form input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .settings-form > .hint {
+    flex-basis: 100%;
+  }
+
+  /* Keep editable columns usable; only the table scrolls, never the page. */
+  .table-scroll .grid-table {
+    min-width: 560px;
+  }
+
+  .table-scroll .grid-table input.grid-input {
+    min-width: 80px;
+  }
+
+  .table-scroll .grid-table .autocomplete input {
+    min-width: 160px;
+  }
+
+  .table-scroll .hypothesis-readonly-table {
+    min-width: 440px;
+  }
+
+  .results-table td:first-child {
+    overflow-wrap: anywhere;
+  }
+
+  .results-table td:not(:first-child) {
+    white-space: nowrap;
+  }
+
+  .sankey-scroll {
+    overflow-x: auto;
+  }
+
+  .sankey-panel .sankey-scroll svg,
+  .detail-sankey-wrap .sankey-scroll svg {
+    min-width: var(--sankey-width, 600px);
+  }
+
+  .detail-sankey-wrap {
+    min-height: 0;
+  }
+
+  .tag-input-field,
+  .transfer-condition-field {
+    min-width: 0;
+    flex-basis: 100%;
+  }
+
+  .transfer-condition-field select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .tag-chip {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    min-width: 0;
+  }
+
+  .tag-chip > span {
+    min-width: 0;
+  }
+
+  .tag-chip-remove {
+    flex-shrink: 0;
+    min-width: 32px;
+  }
+
+  .hypothesis-settings-link,
+  .hypothesis-settings-main,
+  .hypothesis-picker-main {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .hypothesis-settings-name,
+  .hypothesis-picker-name {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    max-width: 100%;
+  }
+
+  .hypothesis-settings-main .tag-list,
+  .hypothesis-picker-main .tag-list {
+    flex-wrap: wrap;
+  }
+
+  .breadcrumbs li {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .breadcrumbs li:last-child {
+    flex-shrink: 1;
+  }
+
+  .empty-state {
+    margin: 40px auto;
+  }
+
+  .detail-overlay {
+    padding: 8px;
+  }
+
+  .detail-dialog,
+  .import-dialog,
+  .matrix-dialog {
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
+    overflow-wrap: anywhere;
+  }
+
+  .hypothesis-picker-dialog {
+    height: calc(100vh - 16px);
+    height: calc(100dvh - 16px);
+  }
+
+  .detail-dialog-header {
+    flex-shrink: 0;
+    gap: 8px;
+    padding: 16px 12px;
+  }
+
+  .detail-dialog-header > div {
+    min-width: 0;
+  }
+
+  .detail-dialog-body,
+  .share-dialog-body,
+  .import-dialog-body,
+  .matrix-dialog-body {
+    min-height: 0;
+    padding: 16px 12px;
+    overflow-y: auto;
+    overflow-wrap: anywhere;
+  }
+
+  .hypothesis-picker-footer {
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    padding: 12px;
+  }
+
+  .hypothesis-picker-body > *,
+  .matrix-dialog-body > * {
+    flex-shrink: 0;
+  }
+
+  .tag-color-input {
+    width: 44px;
+    height: 44px;
+  }
+
+  .candidate-dot.is-editable {
+    width: 24px;
+    height: 24px;
+  }
+
+  .hypothesis-picker-footer > button {
+    flex: 1 1 120px;
+  }
+
+  .matrix-preview {
+    width: min(100%, 512px);
+  }
+
+  .share-link-row {
+    flex-wrap: wrap;
+  }
+
+  .share-link-row input {
+    flex-basis: 100%;
+    min-height: 44px;
+  }
+
+  .share-link-row button {
+    width: 100%;
+  }
+
+  .import-dropzone,
+  .election-delete-dialog {
+    padding: 16px 12px;
+  }
+
+  .election-delete-dialog {
+    max-height: calc(100dvh - 16px);
+    overflow-y: auto;
+  }
+
+  .election-delete-actions {
+    flex-wrap: wrap;
+  }
+
+  .import-link-page {
+    margin: 24px auto;
+    padding: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar {
+    transition: none;
+  }
+}
+
+@media (hover: none) {
+  .sim-tab-delete button,
+  .hypothesis-picker-view {
+    opacity: 1;
+  }
+
+  .sidebar-icon-button[data-tooltip]::after {
+    display: none;
+  }
+}

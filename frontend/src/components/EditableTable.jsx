@@ -4,6 +4,7 @@ import { useRowReorder } from "../hooks/useRowReorder.js";
 import RowDragPreview from "./RowDragPreview.jsx";
 import ReorderHandle from "./ReorderHandle.jsx";
 import ReorderFeedback from "./ReorderFeedback.jsx";
+import TableScroll from "./TableScroll.jsx";
 
 export default function EditableTable({
   columns,
@@ -25,6 +26,7 @@ export default function EditableTable({
 
   return (
     <>
+      <TableScroll>
       <table className={className} ref={tableRef}>
         <thead>
           <tr>
@@ -60,6 +62,7 @@ export default function EditableTable({
         </tbody>
         {footer && <tfoot>{footer}</tfoot>}
       </table>
+      </TableScroll>
       {onReorder && (
         <ReorderFeedback instructionsId={instructionsId} error={error} announcement={announcement} />
       )}

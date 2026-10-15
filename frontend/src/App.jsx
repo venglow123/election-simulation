@@ -17,7 +17,7 @@ export default function App() {
       <HashRouter>
         <div className="app-shell">
           <Sidebar />
-          <div className="main-area">
+          <main className="main-area">
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/elections/:electionId" element={<ElectionHome />} />
@@ -29,7 +29,7 @@ export default function App() {
               <Route path="/import" element={<ImportFromLink />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
-          </div>
+          </main>
         </div>
       </HashRouter>
     </SimulationsProvider>

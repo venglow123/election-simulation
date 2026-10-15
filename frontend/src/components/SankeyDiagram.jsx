@@ -35,8 +35,13 @@ export default function SankeyDiagram({ data }) {
   const { leftX, rightX } = computed;
 
   return (
-    <div ref={containerRef}>
-      <svg viewBox={`0 0 ${computed.diagramWidth} ${SANKEY_HEIGHT}`} width="100%" height={SANKEY_HEIGHT}>
+    <div ref={containerRef} className="sankey-scroll" role="region" aria-label="Diagramme des flux de voix" tabIndex={0}>
+      <svg
+        viewBox={`0 0 ${computed.diagramWidth} ${SANKEY_HEIGHT}`}
+        width="100%"
+        height={SANKEY_HEIGHT}
+        style={{ "--sankey-width": `${computed.diagramWidth}px` }}
+      >
         {computed.ribbons.map((r) => (
           <path
             key={r.key}
